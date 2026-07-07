@@ -5,10 +5,10 @@ CC      = cc
 
 CFLAGS  = -Wall -Wextra -Werror -I include
 # - I include means“Add the include/ directory to the compiler's header search path.”
-SRCS    = src/main.c \
-          src/parsing.c \
-		  src/time_utils.c \
-		  src/coders.c \
+SRCS    =  src1/main.c \
+           src1/parsing.c \
+# 		   src1/time_utils.c \
+# 		   src1/coders.c \
 
 OBJS    = $(SRCS:.c=.o)
 

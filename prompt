@@ -1,0 +1,840 @@
+# ROLE
+
+You are an expert Computer Science professor specializing in Operating Systems, POSIX Threads (pthreads), Concurrent Programming, and C programming.
+
+Your task is to create a **complete professional course** in **HTML only** (single self-contained HTML file with embedded CSS, no JavaScript required unless needed for small interactions).
+
+The course should be designed like a modern online textbook.
+
+---
+
+# GENERAL REQUIREMENTS
+
+The course must be:
+
+* extremely detailed
+* beginner friendly
+* technically correct
+* focused on understanding
+* free from unnecessary motivational text
+* free from repeated information
+* written in clear English
+* visually beautiful
+* easy to navigate
+* suitable for someone preparing for university exams and interviews
+
+The HTML should include:
+
+* modern responsive design
+* table of contents
+* navigation links
+* colored boxes
+* syntax highlighted code blocks (CSS only)
+* notes
+* warnings
+* tips
+* diagrams made with HTML/CSS (no images)
+* tables
+* summaries
+* exercises
+* quiz questions
+* answers at the end
+
+Use only HTML and CSS inside one file.
+
+---
+
+# COURSE TITLE
+
+"POSIX Threads (pthreads), Synchronization and Concurrent Programming in C"
+
+---
+
+# FOR EVERY CONCEPT
+
+For every concept, always include these sections:
+
+## 1. Definition
+
+Give a simple definition.
+
+Then give the formal definition.
+
+Explain why the concept exists.
+
+---
+
+## 2. Intuition
+
+Explain it like teaching someone seeing it for the first time.
+
+Use analogies only if they actually help understanding.
+
+---
+
+## 3. Internal Working
+
+Explain step by step what happens inside the operating system or pthread library.
+
+Explain memory behavior whenever relevant.
+
+---
+
+## 4. Why We Need It
+
+Show the problem first.
+
+Then explain how this concept solves it.
+
+---
+
+## 5. Syntax
+
+Explain every syntax.
+
+Explain every argument.
+
+Explain return values.
+
+Explain possible errors.
+
+---
+
+## 6. C Examples
+
+Start from very simple.
+
+Then medium.
+
+Then realistic.
+
+Every line of code must be explained.
+
+---
+
+## 7. Common Mistakes
+
+Explain common beginner mistakes.
+
+Explain why they happen.
+
+Explain how to avoid them.
+
+---
+
+## 8. Best Practices
+
+Professional advice.
+
+---
+
+## 9. Visual Explanation
+
+Use HTML/CSS diagrams.
+
+No images.
+
+---
+
+## 10. Summary
+
+Short recap.
+
+---
+
+# CHAPTERS
+
+Create the following chapters.
+
+---
+
+# Chapter 1
+
+## Processes
+
+Explain:
+
+* What is a process?
+* Process memory layout
+* Stack
+* Heap
+* Data section
+* BSS
+* Text segment
+
+Explain process creation.
+
+Explain fork().
+
+Explain process IDs.
+
+Explain parent/child.
+
+Explain wait().
+
+Explain exit().
+
+Explain zombies.
+
+Explain orphan processes.
+
+Provide multiple C examples.
+
+---
+
+# Chapter 2
+
+## Threads
+
+Explain:
+
+What is a thread?
+
+Why threads exist.
+
+Thread vs Process.
+
+Advantages.
+
+Disadvantages.
+
+Memory sharing.
+
+Private memory.
+
+Thread IDs.
+
+Life cycle.
+
+Create diagrams.
+
+---
+
+Explain pthread_create()
+
+Prototype
+
+Each argument
+
+Return value
+
+How thread starts
+
+Thread routine
+
+Why thread function returns void *
+
+Explain with many examples.
+
+---
+
+Explain pthread_join()
+
+Prototype
+
+Arguments
+
+Return value
+
+Blocking behavior
+
+Why join is needed
+
+Examples.
+
+---
+
+Explain pthread_exit()
+
+Explain returning values from threads.
+
+Explain retrieving results with pthread_join().
+
+---
+
+Explain pthread_self()
+
+Explain pthread_equal()
+
+Explain pthread_t
+
+Explain what pthread_t actually represents.
+
+Explain why it is not always an integer.
+
+---
+
+# Chapter 3
+
+## Passing Arguments to Threads
+
+Explain:
+
+Passing one variable.
+
+Passing multiple variables.
+
+Using structs.
+
+Passing arrays.
+
+Passing dynamically allocated memory.
+
+Lifetime issues.
+
+Common bugs.
+
+Examples.
+
+---
+
+# Chapter 4
+
+## Race Condition
+
+Explain:
+
+What it is.
+
+Why it happens.
+
+Shared variables.
+
+Interleaving.
+
+CPU scheduling.
+
+Read-modify-write.
+
+Lost updates.
+
+Many examples.
+
+Illustrate possible execution orders.
+
+---
+
+# Chapter 5
+
+## Mutex
+
+Explain:
+
+What is a mutex.
+
+Ownership.
+
+Locking.
+
+Unlocking.
+
+Blocking.
+
+Internal behavior.
+
+Explain:
+
+pthread_mutex_t
+
+pthread_mutex_init()
+
+pthread_mutex_destroy()
+
+pthread_mutex_lock()
+
+pthread_mutex_unlock()
+
+pthread_mutex_trylock()
+
+Explain every argument.
+
+Explain return values.
+
+Explain error cases.
+
+Many C examples.
+
+---
+
+# Chapter 6
+
+## Deadlock
+
+Explain:
+
+Definition.
+
+Necessary conditions.
+
+Circular wait.
+
+Hold and wait.
+
+Mutual exclusion.
+
+No preemption.
+
+Resource allocation graph.
+
+Examples.
+
+How deadlocks happen with mutexes.
+
+How to prevent them.
+
+How to avoid them.
+
+Lock ordering.
+
+Trylock.
+
+Timeouts.
+
+---
+
+# Chapter 7
+
+## Recursive Mutex
+
+Explain:
+
+Why normal mutex fails.
+
+Why recursive mutex exists.
+
+pthread_mutexattr_t
+
+pthread_mutexattr_init()
+
+pthread_mutexattr_settype()
+
+PTHREAD_MUTEX_RECURSIVE
+
+Examples.
+
+Pros and cons.
+
+---
+
+# Chapter 8
+
+## Condition Variables
+
+Explain:
+
+Why mutex alone is not enough.
+
+Waiting.
+
+Sleeping.
+
+Signaling.
+
+Condition.
+
+Predicate.
+
+Explain:
+
+pthread_cond_t
+
+pthread_cond_init()
+
+pthread_cond_destroy()
+
+pthread_cond_wait()
+
+pthread_cond_signal()
+
+pthread_cond_broadcast()
+
+Explain every argument.
+
+Explain that pthread_cond_wait releases the mutex automatically.
+
+Explain why it locks again before returning.
+
+Explain spurious wakeups.
+
+Explain why while() is used instead of if().
+
+Many examples.
+
+Producer-consumer example.
+
+---
+
+# Chapter 9
+
+## Signal vs Broadcast
+
+Explain:
+
+pthread_cond_signal()
+
+pthread_cond_broadcast()
+
+Differences.
+
+When to use each.
+
+Performance.
+
+Examples.
+
+Diagrams.
+
+---
+
+# Chapter 10
+
+## Barriers
+
+Explain:
+
+Synchronization point.
+
+Waiting for all threads.
+
+pthread_barrier_t
+
+pthread_barrier_init()
+
+pthread_barrier_wait()
+
+pthread_barrier_destroy()
+
+Examples.
+
+Parallel computation example.
+
+---
+
+# Chapter 11
+
+## Detached Threads
+
+Explain:
+
+Joinable threads.
+
+Detached threads.
+
+pthread_detach()
+
+pthread_attr_t
+
+pthread_attr_setdetachstate()
+
+Advantages.
+
+Disadvantages.
+
+When to use.
+
+Examples.
+
+---
+
+# Chapter 12
+
+## Semaphore
+
+Explain semaphore from zero.
+
+History.
+
+Meaning.
+
+Counter.
+
+Internal behavior.
+
+Waiting queue.
+
+Atomic operations.
+
+Blocking.
+
+Wake-up.
+
+Explain:
+
+sem_init()
+
+sem_wait()
+
+sem_trywait()
+
+sem_post()
+
+sem_destroy()
+
+Arguments.
+
+Return values.
+
+Examples.
+
+---
+
+Explain Binary Semaphore.
+
+Explain Counting Semaphore.
+
+Explain Login Queue example.
+
+Create a complete login queue implementation.
+
+Explain every line.
+
+---
+
+# Chapter 13
+
+## Mutex vs Semaphore
+
+Large comparison table.
+
+Ownership.
+
+Counter.
+
+Locking.
+
+Unlocking.
+
+Typical uses.
+
+Examples.
+
+Common interview questions.
+
+---
+
+# Chapter 14
+
+## Parallelism vs Concurrency
+
+Explain:
+
+Concurrency.
+
+Parallelism.
+
+Single-core CPU.
+
+Multi-core CPU.
+
+Context switching.
+
+Scheduling.
+
+Examples.
+
+Real-world analogies.
+
+Diagrams.
+
+Comparison tables.
+
+---
+
+# Chapter 15
+
+## Real Projects
+
+Implement completely:
+
+Producer Consumer
+
+Readers Writers
+
+Dining Philosophers
+
+Thread Pool (simple)
+
+Parallel Array Sum
+
+Parallel Matrix Multiplication
+
+Login Queue using Semaphore
+
+Explain every line.
+
+---
+
+# Chapter 16
+
+## Complete API Reference
+
+For every pthread function include:
+
+Prototype
+
+Arguments
+
+Return values
+
+Errors
+
+Notes
+
+Example
+
+Include:
+
+pthread_create
+
+pthread_join
+
+pthread_exit
+
+pthread_self
+
+pthread_equal
+
+pthread_detach
+
+pthread_cancel
+
+pthread_mutex_init
+
+pthread_mutex_destroy
+
+pthread_mutex_lock
+
+pthread_mutex_unlock
+
+pthread_mutex_trylock
+
+pthread_cond_init
+
+pthread_cond_destroy
+
+pthread_cond_wait
+
+pthread_cond_signal
+
+pthread_cond_broadcast
+
+pthread_barrier_init
+
+pthread_barrier_wait
+
+pthread_barrier_destroy
+
+pthread_mutexattr_init
+
+pthread_mutexattr_destroy
+
+pthread_mutexattr_settype
+
+sem_init
+
+sem_wait
+
+sem_trywait
+
+sem_post
+
+sem_destroy
+
+---
+
+# Chapter 17
+
+## Common Interview Questions
+
+At least 100 questions.
+
+Each with detailed answers.
+
+---
+
+# Chapter 18
+
+## Practice Exercises
+
+Easy.
+
+Medium.
+
+Hard.
+
+Real interview problems.
+
+---
+
+# Chapter 19
+
+## Final Cheat Sheet
+
+Summarize:
+
+Processes
+
+Threads
+
+Mutexes
+
+Semaphores
+
+Condition Variables
+
+Barriers
+
+Detached Threads
+
+Race Conditions
+
+Deadlocks
+
+Recursive Mutexes
+
+Signal
+
+Broadcast
+
+Parallelism
+
+Concurrency
+
+API Cheat Sheet
+
+---
+
+# CODING STYLE
+
+Every code block should:
+
+* compile with gcc
+* use POSIX pthreads
+* include headers
+* include main()
+* compile using:
+
+gcc file.c -pthread
+
+Mention this whenever relevant.
+
+---
+
+# QUALITY REQUIREMENTS
+
+Do NOT skip explanations.
+
+Do NOT assume prior knowledge.
+
+Do NOT say "this is obvious."
+
+Do NOT leave functions unexplained.
+
+Do NOT use vague definitions.
+
+Do NOT use filler.
+
+Explain everything step-by-step until the reader can confidently write multithreaded C programs.
+
+The final output should be a polished HTML file that looks like a professional interactive textbook with elegant typography, colored sections, responsive layout, and excellent readability.
+
