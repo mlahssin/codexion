@@ -7,6 +7,7 @@
 # include <stdlib.h>
 # include <pthread.h>
 # include <unistd.h>
+#include <stdbool.h>
 
 
 
@@ -29,7 +30,6 @@ typedef struct  s_dongle
     pthread_mutex_t dongle_mutex;    
 }t_dongle;
 
-
 typedef struct  s_sim
 {
     t_params    params;
@@ -41,6 +41,8 @@ typedef struct  s_coder
     int id;
     t_dongle *left_dongle;
     t_dongle *right_dongle;
+    // int    left_dongle;
+    // int    right_dongle;
     int compile_count;
     int last_compile_start;
     t_sim   *sim;

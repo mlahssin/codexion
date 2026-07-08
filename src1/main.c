@@ -1,8 +1,13 @@
 # include "codexion2.h"
 
-int is_available(t_dongle   dongle)
+bool is_available(t_dongle   *dongle)
 {
-    return  dongle.used == -1;
+    int value;
+    pthread_mutex_lock(&dongle->dongle_mutex);
+    value = dongle->used;
+    pthread_mutex_unlock(&dongle->dongle_mutex);
+    return value == -1;
+
 }
 void    dongle_init(t_dongle    *dongles, t_params  params)
 {
@@ -31,43 +36,56 @@ void    *simulation(void    *arg)
     t_coder *coder = (t_coder   *)arg;
     if (coder->id % 2 == 0)
     {
-        pthread_mutex_lock(&coder->sim->dongles[coder->id].dongle_mutex);
-        if (is_available(coder->sim->dongles[coder->id]))
+        
+        if (is_available(&coder->sim->dongles[coder->id]))
         {
+            pthread_mutex_lock(&coder->sim->dongles[coder->id].dongle_mutex);
             coder->left_dongle = &coder->sim->dongles[coder->id];
             printf("coder %d takes dongle : %d\n", coder->id, coder->id);
-            coder->sim->dongles[coder->id].used = coder->id;   
+            coder->sim->dongles[coder->id].used = coder->id;
+            pthread_mutex_unlock(&coder->sim->dongles[coder->id].dongle_mutex);
         }
-        pthread_mutex_unlock(&coder->sim->dongles[coder->id].dongle_mutex);
+        
+        else
+        {
+           
+            if (is_available(&coder->sim->dongles[(coder->id + 1) % (coder->sim->params.num_coders - 1)]))
+            {
+                pthread_mutex_lock(&coder->sim->dongles[(coder->id + 1) % (coder->sim->params.num_coders - 1)].dongle_mutex);
+                coder->right_dongle = &coder->sim->dongles[(coder->id + 1) % (coder->sim->params.num_coders - 1)];
+                printf("coder %d takes dongle : %d\n", coder->id, (coder->id + 1) % (coder->sim->params.num_coders - 1));
+                coder->sim->dongles[(coder->id + 1) % (coder->sim->params.num_coders - 1)].used = coder->id;
+                pthread_mutex_unlock(&coder->sim->dongles[(coder->id + 1) % (coder->sim->params.num_coders - 1)].dongle_mutex);
+            }
+            
+
+        }
     }
     else
     { 
-        if (coder->id != coder->sim->params.num_coders - 1)
-        {
-            pthread_mutex_lock(&coder->sim->dongles[coder->id + 1].dongle_mutex);
-            if (is_available(coder->sim->dongles[coder->id + 1]))
+            
+            if (is_available(&coder->sim->dongles[(coder->id + 1) % (coder->sim->params.num_coders - 1)]))
+            {
+                pthread_mutex_lock(&coder->sim->dongles[(coder->id + 1) % (coder->sim->params.num_coders - 1)].dongle_mutex);
+                coder->right_dongle = &coder->sim->dongles[(coder->id + 1) % (coder->sim->params.num_coders - 1)];
+                printf("coder %d takes dongle : %d\n", coder->id, (coder->id + 1) % (coder->sim->params.num_coders - 1));
+                coder->sim->dongles[(coder->id + 1) % (coder->sim->params.num_coders - 1)].used = coder->id;
+                pthread_mutex_unlock(&coder->sim->dongles[(coder->id + 1) % (coder->sim->params.num_coders - 1)].dongle_mutex);
+            }
+            
+            else
             {
                 
-                coder->right_dongle = &coder->sim->dongles[coder->id + 1];
-                printf("coder %d takes dongle : %d\n", coder->id, coder->id + 1);
-                coder->sim->dongles[coder->id + 1].used = coder->id;
-            }
-            pthread_mutex_unlock(&coder->sim->dongles[coder->id + 1].dongle_mutex);
-        }
-        else
-        {
-            pthread_mutex_lock(&coder->sim->dongles[0].dongle_mutex);
-            if (is_available(coder->sim->dongles[0]))
-            {
+                if (is_available(&coder->sim->dongles[coder->id]))
+                {
+                    pthread_mutex_lock(&coder->sim->dongles[coder->id].dongle_mutex);
+                    coder->left_dongle = &coder->sim->dongles[coder->id];
+                    printf("coder %d takes dongle : %d\n", coder->id, coder->id);
+                    coder->sim->dongles[coder->id].used = coder->id;
+                    pthread_mutex_unlock(&coder->sim->dongles[coder->id].dongle_mutex);
+                }
                 
-                coder->right_dongle = &coder->sim->dongles[0];
-                printf("coder %d takes dongle : 0\n",coder->id);
-                coder->sim->dongles[0].used = 0; 
-               
-
             }
-            pthread_mutex_unlock(&coder->sim->dongles[0].dongle_mutex);
-        }
     }
     return NULL;
 }
