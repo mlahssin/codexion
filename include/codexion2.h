@@ -8,8 +8,10 @@
 # include <pthread.h>
 # include <unistd.h>
 #include <stdbool.h>
+# include <sys/time.h>
 
 
+typedef struct s_coder t_coder;
 
 typedef struct  s_params
 {
@@ -23,39 +25,69 @@ typedef struct  s_params
     int scheduler_type;
 }t_params;
 
+
+
+typedef struct  s_waiter
+{
+    int coder_id;
+    int prioroty;
+}t_waiter;
+
+
+typedef struct s_heap 
+{
+    int capacity;
+    int size;
+    t_waiter *waiters;
+}t_heap;
+
 typedef struct  s_dongle
 {
-    int used;   //if it is free -1 if not the index of coder which is using it 
-    int released_at;//when the dongle is ready to be used
-    pthread_mutex_t dongle_mutex;    
+    int used;
+    int released_at;
+    pthread_mutex_t dongle_mutex;
+    t_heap    *heap;  
 }t_dongle;
 
-typedef struct  s_sim
+typedef struct  s_shared
 {
     t_params    params;
     t_dongle    *dongles;
-}t_sim;
+    t_coder *coders;
+    pthread_mutex_t print_mutex;
+    int start;
+    int stop;
+    pthread_mutex_t stop_mutex;
+    
+}t_shared;
+
 
 typedef struct  s_coder
 {
     int id;
-    t_dongle *left_dongle;
-    t_dongle *right_dongle;
-    // int    left_dongle;
-    // int    right_dongle;
+    int dongle_index_1;
+    int dongle_index_2;
     int compile_count;
     int last_compile_start;
-    t_sim   *sim;
+    t_shared   *shared;
+
 }t_coder;
 
 
+// typedef struct  s_heap
+// {
+//     s
 
-
+// }t_heap;
 
 
 
 int parse(int ac, char **av, t_params *p);
 
+void    dongle_init(t_shared   *shared);
+void    coders_init(t_coder *coders, t_shared  *shared);
+void    sim_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles);
+int now_ms();
 
 
 #endif
