@@ -1,90 +1,99 @@
-# include <pthread.h>
-# include <stdio.h>
-# include <stdlib.h>
-# include <string.h>
-# include <unistd.h>
-# include <sys/time.h>
+#ifndef CODEXION_H
+#define CODEXION_H
+
 # include <limits.h>
+# include <stdio.h>
+# include <unistd.h>
+# include <string.h>
+# include <stdlib.h>
+# include <pthread.h>
+# include <unistd.h>
+#include <stdbool.h>
+# include <sys/time.h>
+# include <time.h>
 
+typedef struct s_coder t_coder;
 
-
-typedef struct s_params {
-    int     num_coders;        // number_of_coders and number of coders
-    int     time_to_burnout;   // time_to_burnout
-    int     time_to_compile;   // time_to_compile (hold 2 dongles)
-    int     time_to_debug;     // time_to_debug ater compling
-    int     time_to_refactor;  // time_to_refactor after debuging
-    int     num_compiles;      // number_of_compiles_required to stop
-    int     cooldown;          // dongle_cooldown (time so the dongle is ready to be reused)
-    int     scheduler_type;    // 0 for FIFO, 1 for EDF
-
-} t_params;
-
-// struct t_coder;
-// struct t_heap;
-// struct t_sim;
-
-
-typedef struct s_dongle
+typedef struct  s_params
 {
-    int available;  // // 1 = free, 0 = taken
-    long long released_at; // time when it will be ready 
-    pthread_mutex_t mutex; // a dongle is a shared data so we should avoid the data race
-    pthread_cond_t  cond;
-    // t_heap  queue;//priority queue of coders waiting
+    int num_coders;
+    int time_to_burnout;
+    int time_to_compile;
+    int time_to_debug;
+    int time_to_refactor;
+    int num_compiles;
+    int cooldown;
+    int scheduler_type;
+}t_params;
+
+
+
+typedef struct  s_waiter
+{
+    int coder_id;
+    int prioroty;
+}t_waiter;
+
+
+// typedef struct s_heap 
+// {
+//     int capacity;
+//     int size;
+//     t_waiter *waiters;
+// }t_heap;
+
+typedef struct  s_dongle
+{
+    int used;
+    int released_at;
+    pthread_mutex_t dongle_mutex;
+    t_waiter    waiters[2];  
+    int size;
+    pthread_cond_t  dongle_wait;
 }t_dongle;
 
-typedef struct s_coder
+typedef struct  s_shared
+{
+    t_params    params;
+    t_dongle    *dongles;
+    t_coder *coders;
+    pthread_mutex_t print_mutex;
+    long long start;
+    int stop;
+    pthread_mutex_t stop_mutex;
+    
+}t_shared;
+
+
+typedef struct  s_coder
 {
     int id;
+    int dongle_index_1;
+    int dongle_index_2;
     int compile_count;
     int last_compile_start;
-    t_dongle *left;
-    t_dongle *right;
-    long    start_time;
-    // t_sim   *sim;
+    t_shared   *shared;
+
 }t_coder;
 
 
-
-
-
-
-
-
-// typedef struct s_heap
+// typedef struct  s_heap
 // {
-//     t_waiter    *data; //array of waiters stored as a tree
-//     int         size; // how many waiters are currently in heap
-//     int         capacity;// max waiter that can the heap hold
-// }   t_heap;
+//     s
 
-
-
-// for the entire simulation
-struct s_sim
-{
-    t_params        params;       // all 8 arguments from user
-    t_coder         *coders;      // array of N coders
-    t_dongle        *dongles;
-    pthread_t *threads;// stores threads ids from pthread_create
-    int stopped; //0 keep running , 1 stop now
-    pthread_mutex_t stop_mutex; //stopped is shared betwen all threads
-    pthread_mutex_t log_mutex; //printf is not thread safe (2 threads printin on the same time)
-    long start_time;
-}t_sim;
-
-// typedef struct s_waiter {
-//     t_coder     *coder; // who is waiter --pointer to the coder
-//     long long   priority;    // arrival timestamp (FIFO) or deadline (EDF)
-//     int   tiebreak;    // coder->id for determinism lower id win
-// } t_waiter;
+// }t_heap;
 
 
 
 int parse(int ac, char **av, t_params *p);
-long  now_ms();
-long  elapsed_ms(long start);
-void *routine(void *arg);
-// long parse_args(char *str);
-// void fill_args(t_params *p, char **av);
+
+void    dongle_init(t_shared   *shared);
+void    coders_init(t_coder *coders, t_shared  *shared);
+void    sim_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles);
+long long     now_ms();
+void    push(t_dongle   *dongle, t_waiter   w);
+int pop(t_dongle  *dongle);
+int extract_min(t_dongle *dongle);
+
+
+#endif

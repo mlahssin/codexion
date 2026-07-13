@@ -1,4 +1,5 @@
-# include "codexion2.h"
+# include "codexion.h"
+
 
 void    dongle_init(t_shared   *shared)
 {
@@ -40,11 +41,19 @@ void    coders_init(t_coder *coders, t_shared  *shared)
     }
 }
 
+// int now_ms()
+// {
+//     struct timeval now;
+//     gettimeofday(&now, NULL);
+//     return  now.tv_sec * 1000 + now.tv_usec / 1000;
+// }
+
 void    sim_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles)
 {
     shared->dongles = dongles;
     shared->coders = coders;
     shared->start = now_ms();
+    // printf("shared->start : %lld\n", shared->start);
     shared->stop = 0;
     pthread_mutex_init(&shared->print_mutex, NULL);
     pthread_mutex_init(&shared->stop_mutex, NULL); 

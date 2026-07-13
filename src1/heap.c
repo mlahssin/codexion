@@ -1,6 +1,4 @@
-#include "codexion2.h"
-
-
+#include "codexion.h"
 
 
 bool is_empty(t_dongle *dongle)
@@ -51,6 +49,7 @@ void    push(t_dongle   *dongle, t_waiter   w)
     {
         if (is_empty(dongle))
         {
+            // printf("hello\n");
             dongle->waiters[0] = w;
             dongle->size++;
             return;            

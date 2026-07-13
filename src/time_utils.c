@@ -5,18 +5,18 @@
 # include <unistd.h>
 
 // is the long can overflow || should i add the LL near to 1000 
-long now_ms(void)
-{
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    return (now.tv_sec * 1000 + now.tv_usec / 1000);
-}
+// long now_ms(void)
+// {
+//     struct timeval now;
+//     gettimeofday(&now, NULL);
+//     return (now.tv_sec * 1000 + now.tv_usec / 1000);
+// }
 
 
-long  elapsed_ms(long start)
-{
-    return (now_ms() - start);
-}
+// long  elapsed_ms(long start)
+// {
+//     return (now_ms() - start);
+// }
 
 
 // int main()
