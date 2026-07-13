@@ -5,6 +5,10 @@ void    set_stop(t_shared  *shared)
 {
     pthread_mutex_lock(&shared->stop_mutex);
     shared->stop = 1;
+    for (int i = 0; i < shared->params.num_coders; i++)
+    {
+        pthread_cond_broadcast(&shared->dongles[i].dongle_wait);
+    }
     pthread_mutex_unlock(&shared->stop_mutex);
 }
 
@@ -68,17 +72,33 @@ void    print_lock(int  id, int flag, t_shared *shared)
     // }
         
     if (flag == 0)
+    {
+        if (get_stop(shared) != 0)
+            return;
         printf("%lld %d has taken a dongle\n", elapsed_time(shared->start), id + 1);
+    }
+        
     else if (flag == 1)
+    {
+        if (get_stop(shared) != 0)
+            return;
         printf("%lld %d is compiling\n", elapsed_time(shared->start), id + 1);
+    }
     else if (flag == 2)
+    {
+        if (get_stop(shared) != 0)
+            return;
         printf("%lld %d is debugging\n", elapsed_time(shared->start), id + 1);
+    }
     else if (flag == 3)
+    {
+        if (get_stop(shared) != 0)
+            return;
         printf("%lld %d is refactoring\n", elapsed_time(shared->start), id + 1);
+    }
     else
     {
         printf("%lld %d burned out\n", elapsed_time(shared->start), id + 1);
-
     }
     pthread_mutex_unlock(&shared->print_mutex);
 }
@@ -117,8 +137,9 @@ void    let_dongle(t_dongle *dongle, t_shared  *shared)
     pthread_mutex_lock(&dongle->dongle_mutex);
     if (get_stop(shared) != 0)
     {
-        pthread_cond_broadcast(&dongle->dongle_wait);
-        pthread_mutex_unlock(&dongle->dongle_mutex);  
+        // pthread_cond_broadcast(&dongle->dongle_wait);
+        pthread_mutex_unlock(&dongle->dongle_mutex);
+        return;
     }
     dongle->used = -1;
     dongle->released_at = elapsed_time(shared->start) + shared->params.cooldown;
@@ -135,20 +156,16 @@ void    try_use_dongle(t_dongle *dongle, t_coder    *coder)
     if (coder->shared->params.scheduler_type == 0)
     {
         w.prioroty = now_ms();
-        // printf("coder->id : %d\n", w.coder_id);
     }
     else
         w.prioroty = coder->last_compile_start + coder->shared->params.time_to_burnout;
-    // printf("first elt in the heap is : %d", coder->id);
     pthread_mutex_lock(&dongle->dongle_mutex);
     if (get_stop(coder->shared)!= 0)
     {
         pthread_mutex_unlock(&dongle->dongle_mutex);
         return;
     }
-    // printf("first elt in the heap is : %d", coder->id);
     push(dongle, w);
-    // printf("first elt in the heap is : %d", extract_min(dongle));
     pthread_mutex_unlock(&dongle->dongle_mutex);
 }
 bool    only_cooldown(t_dongle *dongle, t_coder    *coder)
@@ -158,7 +175,6 @@ bool    only_cooldown(t_dongle *dongle, t_coder    *coder)
 
 bool    all_reasons(t_dongle *dongle, t_coder    *coder)
 {
-    // printf("slet\n");
     return(extract_min(dongle) != coder->id || !is_available(dongle)  || !cooldown_finished(dongle, coder->shared->start));
 }
 
@@ -168,7 +184,6 @@ void    wait_time(struct timespec *ts, long long ms_from_now)
     long long sec_add;
     long long nsec_add;
     gettimeofday(&now, NULL);
-    // printf("9azddoooo7\n");
     ts->tv_sec = now.tv_sec;
     ts->tv_nsec = now.tv_usec * 1000;
 
@@ -191,16 +206,12 @@ void    use_dongle(t_dongle *dongle, t_coder    *coder, int flag)
     long long time_left = dongle->released_at - elapsed_time(coder->shared->start);
     wait_time(&ts, time_left);
     
-    // printf("dkhoool\n");
     while(get_stop(coder->shared) != 0 && all_reasons(dongle, coder))
     {
-        // printf("HELLO1\n");
         while(only_cooldown(dongle, coder))
         {
-            // printf("HELLO3\n");
             pthread_cond_timedwait(&dongle->dongle_wait, &dongle->dongle_mutex, &ts);
         }
-        // printf("HELLO\n");
         pthread_cond_wait(&dongle->dongle_wait, &dongle->dongle_mutex);
     }
 
@@ -311,7 +322,6 @@ void    *monitoring(void *arg)
         int burnout_coder = is_burnout(shared->coders, shared->params.num_coders);
         if(burnout_coder != -1)
         {
-            
             set_stop(shared);
             // printf("dun burn \n");
             print_lock(burnout_coder, 4,shared);
