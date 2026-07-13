@@ -3,9 +3,9 @@
 
 
 
-bool is_empty(t_heap *heap)
+bool is_empty(t_dongle *dongle)
 {
-    return heap->size == 0;
+    return dongle->size == 0;
 }
 
 void    swap(t_waiter *a, t_waiter *b)
@@ -16,121 +16,130 @@ void    swap(t_waiter *a, t_waiter *b)
     *b = tmp; 
 }
 
-t_waiter *extract_min(t_heap *heap)
+int extract_min(t_dongle *dongle)
 {
-    if(!is_empty(heap))
-        return heap->waiters;
-    return NULL;
+    if(!is_empty(dongle))
+        return dongle->waiters[0].coder_id;
+    return -1;
 }
 
-void    buble_up(t_heap *heap, int index)
+void    buble_up(t_dongle *dongle, int index)
 {
     int i = index;
+    int parent;
     while (i > 0)
     {
-        if (heap->waiters[i].prioroty < heap->waiters[(i - 1) / 2].prioroty)
+        parent = (i - 1) / 2;
+        if (dongle->waiters[i].prioroty < dongle->waiters[parent].prioroty)
         {
-            swap(&heap->waiters[i], &heap->waiters[(i - 1) / 2]);
-            i = (i - 1) / 2;
+            swap(&dongle->waiters[i], &dongle->waiters[parent]);
+            i = parent;
         }
         else
             break;
     }
 }
 
-void    push(t_heap   *heap, t_waiter   w)
+void    push(t_dongle   *dongle, t_waiter   w)
 {
     //if fifo : 0
     // prioroty : come first : elapsed time
     //if edf: 1
     //priorority:
     //coder last compile start + time_burnout
-    if (heap->size < heap->capacity)
+    if (dongle->size < 2)
     {
-        if (is_empty(heap))
+        if (is_empty(dongle))
         {
-                heap->waiters[0] = w;
-                heap->size++;
-                return;            
+            dongle->waiters[0] = w;
+            dongle->size++;
+            return;            
         }
-        heap->waiters[heap->size] = w;
-        heap->size++;
-        int i = heap->size - 1;
-        buble_up(heap, heap->size - 1);
+        dongle->waiters[dongle->size] = w;
+
+        dongle->size++;
+        int i = dongle->size - 1;
+        buble_up(dongle, dongle->size - 1);
     }
     else
         return;
+    // printf("%d\n", dongle->size);
 }
 
-void    shif_down(t_heap *heap)
+void    shif_down(t_dongle *dongle)
 {
     int i = 0;
     int left_child;
     int right_child;
     
 
-    while(i < heap->size)
+    while(i < dongle->size)
     {
         left_child = 2 * i + 1;
         right_child = 2 * i + 2;
         int smallest = i;
-        if(heap->waiters[left_child].prioroty < heap->waiters[smallest].prioroty)
+        if(left_child < dongle->size && dongle->waiters[left_child].prioroty < dongle->waiters[smallest].prioroty)
         {
             smallest = left_child;
         }
-        if(heap->waiters[right_child].prioroty < heap->waiters[smallest].prioroty)
+        if(right_child < dongle->size && dongle->waiters[right_child].prioroty < dongle->waiters[smallest].prioroty)
         {
             smallest = right_child;
         }
         if(smallest == i)
             break;
-        swap(&heap->waiters[i], &heap->waiters[smallest]);
+        swap(&dongle->waiters[i], &dongle->waiters[smallest]);
     }
 }
-t_waiter *pop(t_heap  *heap)
+
+int pop(t_dongle  *dongle)
 {
-    if(is_empty(heap))
+    if(is_empty(dongle))
+        return -1;
+    int value;
+    if (dongle->size == 1)
     {
-        return NULL;
-    }
-    if (heap->size == 1)
-    {
-       t_waiter *w = extract_min(heap);
-        heap->size--;
-        return w;
+        value  = extract_min(dongle);
+        dongle->size--;
+        return value;
     }
 
-    t_waiter *w = extract_min(heap);
-    heap->waiters[0] = heap->waiters[heap->size - 1];
-    heap->size--;
-    shif_down(heap);
-    return  w;
+    value = extract_min(dongle);
+    dongle->waiters[0] = dongle->waiters[dongle->size - 1];
+    dongle->size--;
+    shif_down(dongle);
+    return  value;
 }
-
 
 // int main()
 // {
-//     t_heap  heap;
-//     heap.capacity = 5;
-//     heap.size = 0;
-//     heap.waiters = malloc(sizeof(t_waiter) * heap.capacity);
+//     t_dongle  dongle;
+//     // dongle.capacity = 5;
+//     dongle.size = 0;
 //     t_waiter    w1, w2, w3, w4, w5;
-//     w1.prioroty = 10;
+//     w1.prioroty = 0;
+//     w1.coder_id = 1;
 //     w2.prioroty = 7;
-//     w3.prioroty = 4;
-//     w4.prioroty = 5;
-//     w5.prioroty = 0;
+//     w2.coder_id = 2;
+//     // w3.prioroty = 4;
+//     // w4.prioroty = 5;
+//     // w5.prioroty = 0;
 
-//     push(&heap,w1);
-//     printf("%d\n", extract_min(&heap)->prioroty);
-//     push(&heap,w2);
-//     printf("%d\n", extract_min(&heap)->prioroty);
-//     push(&heap,w3);
-//     printf("%d\n", extract_min(&heap)->prioroty);
-//     push(&heap,w4);
-//     printf("%d\n", extract_min(&heap)->prioroty);
-//     push(&heap,w5);
-//     printf("%d\n", extract_min(&heap)->prioroty);
-//     pop(&heap);
-//     printf("%d\n", extract_min(&heap)->prioroty);
+//     push(&dongle,w1);
+//     printf("%d\n", extract_min(&dongle));
+//     push(&dongle,w2);
+//     printf("%d\n", extract_min(&dongle));
+
+//     // push(&dongle,w3);
+//     // printf("%d\n", extract_min(&dongle));
+//     // push(&dongle,w4);
+//     // printf("%d\n", extract_min(&dongle));
+//     // push(&dongle,w5);
+//     // printf("%d\n", extract_min(&dongle));
+//     pop(&dongle);
+//     printf("%d\n", extract_min(&dongle));
+//     // pop(&dongle);
+//     // pop(&dongle);
+//     pop(&dongle);
+//     printf("%d\n", extract_min(&dongle));
 // }

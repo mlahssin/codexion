@@ -51,12 +51,7 @@ bool is_available(t_dongle   *dongle, int start)
     return value == -1 && elapsed_time(start) >= dongle->released_at;
 }
 
-void    use_dongle(t_dongle *dongle, int id)
-{
-    pthread_mutex_lock(&dongle->dongle_mutex);
-    dongle->used = id;
-    pthread_mutex_unlock(&dongle->dongle_mutex);
-}
+
 
 void    print_lock(int  id, int flag, t_shared *shared)
 {
@@ -106,6 +101,13 @@ int    is_burnout(t_coder  *coders, int num_coders)
 }
 
 
+void    use_dongle(t_dongle *dongle, int id)
+{
+    pthread_mutex_lock(&dongle->dongle_mutex);
+    dongle->used = id;
+    // pop(dongle);
+    pthread_mutex_unlock(&dongle->dongle_mutex);
+}
 
 void    let_dongle(t_dongle *dongle, t_shared  *shared, int flag)
 {
@@ -116,70 +118,99 @@ void    let_dongle(t_dongle *dongle, t_shared  *shared, int flag)
     pthread_mutex_unlock(&dongle->dongle_mutex);   
 }
 
+// void    try_use_dongle(t_dongle *dongle, t_coder    *coder)
+// {
+//     t_waiter    w;
+//     w.coder_id = coder->id;
+//     if (coder->shared->params.scheduler_type == 0)
+//         w.prioroty = now_ms();
+//     else
+//         w.prioroty = coder->last_compile_start + coder->shared->params.time_to_burnout;
+    
+//     pthread_mutex_lock(&dongle->dongle_mutex);
+//     push(dongle, w);
+//     pthread_mutex_unlock(&dongle->dongle_mutex);
+// }
+
+
 void    *routine(void    *arg)
 {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
     t_coder *coder = (t_coder   *)arg;
 
     while(get_stop(coder->shared) == 0)
     {
-        if (is_available(&coder->shared->dongles[coder->dongle_index_1], coder->shared->start))
-        {
-            if(get_stop(coder->shared) == 1)
+        // try_use_dongle(&coder->shared->dongles[coder->dongle_index_1], coder);
+        //coder is the first elt of the heap and the dongle is available.
+            if (is_available(&coder->shared->dongles[coder->dongle_index_1], coder->shared->start))
             {
-                return NULL;
-            }
-            use_dongle(&coder->shared->dongles[coder->dongle_index_1], coder->id);
-            if (is_available(&coder->shared->dongles[coder->dongle_index_2], coder->shared->start))
-            {
+                // printf("coder_id : %d\n", coder->id);
+                use_dongle(&coder->shared->dongles[coder->dongle_index_1], coder->id);
                 if(get_stop(coder->shared) == 1)
                 {
                     return NULL;
                 }
-               
-                print_lock(coder->id, 0,coder->shared);
-                pthread_mutex_lock(&coder->shared->dongles[coder->dongle_index_2].dongle_mutex);
-                
-                if(get_stop(coder->shared) == 1)
+                use_dongle(&coder->shared->dongles[coder->dongle_index_1], coder->id);
+                // try_use_dongle(&coder->shared->dongles[coder->dongle_index_1], coder);
+            // printf("min = %d coder_id = %d\n", extract_min(&coder->shared->dongles[coder->dongle_index_2]), coder->id);
+                if (is_available(&coder->shared->dongles[coder->dongle_index_2], coder->shared->start))
                 {
-                    return NULL;
+                    if(get_stop(coder->shared) == 1)
+                    {
+                        return NULL;
+                    }
+                    
+                    print_lock(coder->id, 0,coder->shared);
+                    pthread_mutex_lock(&coder->shared->dongles[coder->dongle_index_2].dongle_mutex);
+                    
+                    if(get_stop(coder->shared) == 1)
+                    {
+                        return NULL;
+                    }
+                    print_lock(coder->id, 0,coder->shared);
+                    coder->shared->dongles[coder->dongle_index_2].used = coder->id;
+                    // pop(&coder->shared->dongles[coder->dongle_index_2]);
+                    pthread_mutex_unlock(&coder->shared->dongles[coder->dongle_index_2].dongle_mutex);
+                    coder->compile_count++;
+                    if(get_stop(coder->shared) == 1)
+                    {
+                        return NULL;
+                    }
+
+                    print_lock(coder->id, 1,coder->shared);
+                    coder->last_compile_start = elapsed_time(coder->shared->start);
+                    smart_sleep(coder->shared->params.time_to_compile * 1000, coder->shared);
+                    let_dongle(&coder->shared->dongles[coder->dongle_index_1], coder->shared, 0);
+                    let_dongle(&coder->shared->dongles[coder->dongle_index_2], coder->shared, 0);
+                    
+                    if(get_stop(coder->shared) == 1)
+                    {
+                        return NULL;
+                    }
+
+                    print_lock(coder->id, 2,coder->shared);
+                    smart_sleep(coder->shared->params.time_to_debug * 1000, coder->shared);
+                    if(get_stop(coder->shared) == 1)
+                    {
+                        return NULL;
+                    }
+                    print_lock(coder->id, 3,coder->shared);
+                    smart_sleep(coder->shared->params.time_to_refactor * 1000, coder->shared);
                 }
-                print_lock(coder->id, 0,coder->shared);
-                coder->shared->dongles[coder->dongle_index_2].used = coder->id;
-                pthread_mutex_unlock(&coder->shared->dongles[coder->dongle_index_2].dongle_mutex);
-                coder->compile_count++;
+                // else
+                // {
+                //     pthread_cond_wait(&coder->shared->dongles[coder->dongle_index_1].dongle_wait, &);
+                // }
+            else
+            {
                 if(get_stop(coder->shared) == 1)
                 {
                     return NULL;
                 }
 
-                print_lock(coder->id, 1,coder->shared);
-                coder->last_compile_start = elapsed_time(coder->shared->start);
-                smart_sleep(coder->shared->params.time_to_compile * 1000, coder->shared);
-                let_dongle(&coder->shared->dongles[coder->dongle_index_1], coder->shared, 0);
-                let_dongle(&coder->shared->dongles[coder->dongle_index_2], coder->shared, 0);
-                
-                if(get_stop(coder->shared) == 1)
-                {
-                    return NULL;
-                }
-
-                print_lock(coder->id, 2,coder->shared);
-                smart_sleep(coder->shared->params.time_to_debug * 1000, coder->shared);
-                if(get_stop(coder->shared) == 1)
-                {
-                    return NULL;
-                }
-                print_lock(coder->id, 3,coder->shared);
-                smart_sleep(coder->shared->params.time_to_refactor * 1000, coder->shared);
-        }
-        else
-        {
-            if(get_stop(coder->shared) == 1)
-            {
-                return NULL;
+                // pop(&coder->shared->dongles[coder->dongle_index_1]);
+                let_dongle(&coder->shared->dongles[coder->dongle_index_1], coder->shared, 1);
+            
             }
-            let_dongle(&coder->shared->dongles[coder->dongle_index_1], coder->shared, 1);
-        }
         }
     }
     return NULL;

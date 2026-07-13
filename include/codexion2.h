@@ -34,19 +34,21 @@ typedef struct  s_waiter
 }t_waiter;
 
 
-typedef struct s_heap 
-{
-    int capacity;
-    int size;
-    t_waiter *waiters;
-}t_heap;
+// typedef struct s_heap 
+// {
+//     int capacity;
+//     int size;
+//     t_waiter *waiters;
+// }t_heap;
 
 typedef struct  s_dongle
 {
     int used;
     int released_at;
     pthread_mutex_t dongle_mutex;
-    t_heap    *heap;  
+    t_waiter    waiters[2];  
+    int size;
+    pthread_cond_t  dongle_wait;
 }t_dongle;
 
 typedef struct  s_shared
@@ -88,6 +90,9 @@ void    dongle_init(t_shared   *shared);
 void    coders_init(t_coder *coders, t_shared  *shared);
 void    sim_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles);
 int now_ms();
+void    push(t_dongle   *dongle, t_waiter   w);
+int pop(t_dongle  *dongle);
+int extract_min(t_dongle *dongle);
 
 
 #endif

@@ -8,9 +8,8 @@ void    dongle_init(t_shared   *shared)
         shared->dongles[i].used = -1;
         shared->dongles[i].released_at = 0;
         pthread_mutex_init(&shared->dongles[i].dongle_mutex, NULL);
-        // shared->dongles[i].heap->capacity = 2;
-        // shared->dongles[i].heap->size = 0;
-        // shared->dongles[i].heap->waiters = malloc(2 * sizeof(t_waiter));
+        pthread_cond_init(&shared->dongles[i].dongle_wait, NULL);
+        shared->dongles[i].size = 0;
     }
 }
 
