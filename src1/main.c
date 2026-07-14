@@ -37,7 +37,6 @@ void    smart_sleep(int time, t_shared *shared)
     int start = elapsed_time(shared->start);
     while(get_stop(shared) == 0)
     {
-        // printf("here!\n");
         if(get_stop(shared) == 1)
         {
             
@@ -63,7 +62,6 @@ bool is_available(t_dongle   *dongle)
 
 bool    cooldown_finished(t_dongle   *dongle, int start)
 {
-    // printf("here!\n");
     return elapsed_time(start) >= dongle->released_at;
 }
 
@@ -123,7 +121,6 @@ bool    is_finish(t_coder   *coders, int num_coders)
     // {
         while(i < num_coders)
         {
-            // printf("hello\n");
             if (coders[i].compile_count < coders[i].shared->params.num_compiles)
                 return false;
             i++;
@@ -179,12 +176,10 @@ void    try_use_dongle(t_dongle *dongle, t_coder    *coder)
     }
     push(dongle, w);
 
-    // printf("dkhalt hooone\n");
     pthread_mutex_unlock(&dongle->dongle_mutex);
 }
 bool    only_cooldown(t_dongle *dongle, t_coder    *coder)
 {
-    // printf("hiiiiiiii3\n"); 
     return(extract_min(dongle) == coder->id && is_available(dongle) && !cooldown_finished(dongle, coder->shared->start));
 }
 
@@ -235,10 +230,8 @@ void    use_dongle(t_dongle *dongle, t_coder    *coder, int flag)
 
     while(get_stop(coder->shared) == 0)
     {
-        // printf("hiiiiiiii\n"); 
         if(all_reasons(dongle, coder))
         {  
-            //  printf("hiiiiiiii1\n");
             dongle->used = coder->id;
             pop(dongle);
             pthread_cond_broadcast(&dongle->dongle_wait);
@@ -257,17 +250,19 @@ void    use_dongle(t_dongle *dongle, t_coder    *coder, int flag)
         {
             
             // while(only_cooldown(dongle, coder))
-            // printf("hiiiiiiii\n"); 
+            // while(only_cooldown(dongle, coder))
+            // {
             pthread_cond_timedwait(&dongle->dongle_wait, &dongle->dongle_mutex, &ts);
+            // }
         }
         else
         {
-            // printf("hiiiiiiii4\n"); 
+            // while(!(is_available(dongle) && coder->id == extract_min(dongle)))
+            // {
             pthread_cond_wait(&dongle->dongle_wait, &dongle->dongle_mutex);
+            // }
         }
     }
-    // printf("hiiiiiiii2\n");
-    // printf("hiiiiiiii\n");
     // if (get_stop(coder->shared) != 0)
     // {  
     //     pthread_mutex_unlock(&dongle->dongle_mutex);
@@ -289,7 +284,7 @@ void    *routine(void    *arg)
         use_dongle(&coder->shared->dongles[coder->dongle_index_1], coder, 0);
         try_use_dongle(&coder->shared->dongles[coder->dongle_index_2], coder);
         use_dongle(&coder->shared->dongles[coder->dongle_index_2], coder, 1);
-        
+
         if(get_stop(coder->shared) == 1)
         {
             return NULL;
@@ -386,5 +381,19 @@ int main(int ac, char *av[])
     {
         pthread_mutex_destroy(&dongles[i].dongle_mutex);
     }
+    for (int i = 0; i < shared.params.num_coders; i++)
+    {
+        pthread_mutex_destroy(&shared.dongles[i].dongle_mutex);
+        pthread_cond_destroy(&shared.dongles[i].dongle_wait);
+
+    }
+    pthread_mutex_destroy(&shared.print_mutex);
+    pthread_mutex_destroy(&shared.stop_mutex);
+    free(coder_ths);
+    free(coders);
+    free(dongles);
+    
+
+
 
 }
