@@ -77,11 +77,19 @@ void    shif_down(t_dongle *dongle)
         left_child = 2 * i + 1;
         right_child = 2 * i + 2;
         int smallest = i;
-        if(left_child < dongle->size && dongle->waiters[left_child].prioroty < dongle->waiters[smallest].prioroty)
+        if(left_child < dongle->size && dongle->waiters[left_child].prioroty <= dongle->waiters[smallest].prioroty)
         {
+            // if (dongle->waiters[left_child].prioroty == dongle->waiters[smallest].prioroty)
+            // {
+            //     if (dongle->waiters[left_child].coder_id < dongle->waiters[smallest].coder_id)
+            //     {
+            //         smallest = left_child;
+            //     }
+            // }
+            // else
             smallest = left_child;
         }
-        if(right_child < dongle->size && dongle->waiters[right_child].prioroty < dongle->waiters[smallest].prioroty)
+        if(right_child < dongle->size && dongle->waiters[right_child].prioroty <= dongle->waiters[smallest].prioroty)
         {
             smallest = right_child;
         }
