@@ -56,49 +56,75 @@ void    push(t_dongle   *dongle, t_waiter   w)
         dongle->waiters[dongle->size] = w;
 
         dongle->size++;
-        // int i = dongle->size - 1;
         buble_up(dongle, dongle->size - 1);
     }
     else
         return;
 }
 
+int find_smallest(t_dongle   *dongle, int parent, int left_child, int right_child)
+{
+    int smallest;
+
+    smallest = parent;
+    if(left_child < dongle->size && dongle->waiters[left_child].prioroty <= dongle->waiters[smallest].prioroty)
+    {
+        if (dongle->waiters[left_child].prioroty == dongle->waiters[smallest].prioroty)
+        {
+            if (dongle->waiters[left_child].coder_id < dongle->waiters[smallest].coder_id)
+                smallest = left_child;
+        }
+        else
+            smallest = left_child;
+    }
+    if(right_child < dongle->size && dongle->waiters[right_child].prioroty <= dongle->waiters[smallest].prioroty)
+    {
+        if (dongle->waiters[right_child].prioroty == dongle->waiters[smallest].prioroty)
+        {
+            if (dongle->waiters[right_child].coder_id < dongle->waiters[smallest].coder_id)
+                smallest = right_child;
+        }
+        else
+            smallest = right_child;
+    }
+    return smallest;
+
+}
+
 void    shift_down(t_dongle *dongle)
 {
-    int i = 0;
+    int i;
     int left_child;
     int right_child;
+    int smallest;
     
-
+    i = 0;
     while(i < dongle->size)
     {
         left_child = 2 * i + 1;
         right_child = 2 * i + 2;
-        int smallest = i;
-        if(left_child < dongle->size && dongle->waiters[left_child].prioroty <= dongle->waiters[smallest].prioroty)
-        {
-            if (dongle->waiters[left_child].prioroty == dongle->waiters[smallest].prioroty)
-            {
-                if (dongle->waiters[left_child].coder_id < dongle->waiters[smallest].coder_id)
-                {
-                    smallest = left_child;
-                }
-            }
-            else
-                smallest = left_child;
-        }
-        if(right_child < dongle->size && dongle->waiters[right_child].prioroty <= dongle->waiters[smallest].prioroty)
-        {
-            if (dongle->waiters[right_child].prioroty == dongle->waiters[smallest].prioroty)
-            {
-                if (dongle->waiters[right_child].coder_id < dongle->waiters[smallest].coder_id)
-                {
-                    smallest = right_child;
-                }
-            }
-            else
-                smallest = right_child;
-        }
+        // smallest = i;
+        // if(left_child < dongle->size && dongle->waiters[left_child].prioroty <= dongle->waiters[smallest].prioroty)
+        // {
+        //     if (dongle->waiters[left_child].prioroty == dongle->waiters[smallest].prioroty)
+        //     {
+        //         if (dongle->waiters[left_child].coder_id < dongle->waiters[smallest].coder_id)
+        //             smallest = left_child;
+        //     }
+        //     else
+        //         smallest = left_child;
+        // }
+        // if(right_child < dongle->size && dongle->waiters[right_child].prioroty <= dongle->waiters[smallest].prioroty)
+        // {
+        //     if (dongle->waiters[right_child].prioroty == dongle->waiters[smallest].prioroty)
+        //     {
+        //         if (dongle->waiters[right_child].coder_id < dongle->waiters[smallest].coder_id)
+        //             smallest = right_child;
+        //     }
+        //     else
+        //         smallest = right_child;
+        // }
+        smallest = find_smallest(dongle, i, left_child, right_child);
         if(smallest == i)
             break;
         swap(&dongle->waiters[i], &dongle->waiters[smallest]);
@@ -126,35 +152,3 @@ int pop(t_dongle  *dongle)
     return  value;
 }
 
-// int main()
-// {
-//     t_dongle  dongle;
-//     // dongle.capacity = 5;
-//     dongle.size = 0;
-//     t_waiter    w1, w2, w3, w4, w5;
-//     w1.prioroty = 0;
-//     w1.coder_id = 1;
-//     w2.prioroty = 7;
-//     w2.coder_id = 2;
-//     // w3.prioroty = 4;
-//     // w4.prioroty = 5;
-//     // w5.prioroty = 0;
-
-//     push(&dongle,w1);
-//     printf("%d\n", extract_min(&dongle));
-//     push(&dongle,w2);
-//     printf("%d\n", extract_min(&dongle));
-
-//     // push(&dongle,w3);
-//     // printf("%d\n", extract_min(&dongle));
-//     // push(&dongle,w4);
-//     // printf("%d\n", extract_min(&dongle));
-//     // push(&dongle,w5);
-//     // printf("%d\n", extract_min(&dongle));
-//     pop(&dongle);
-//     printf("%d\n", extract_min(&dongle));
-//     // pop(&dongle);
-//     // pop(&dongle);
-//     pop(&dongle);
-//     printf("%d\n", extract_min(&dongle));
-// }

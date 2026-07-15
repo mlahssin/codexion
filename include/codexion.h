@@ -78,23 +78,18 @@ typedef struct  s_coder
 }t_coder;
 
 
-// typedef struct  s_heap
-// {
-//     s
-
-// }t_heap;
-
 
 
 int parse(int ac, char **av, t_params *p);
 
 void    dongle_init(t_shared   *shared);
 void    coders_init(t_coder *coders, t_shared  *shared);
-void    sim_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles);
+void    shared_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles);
 long long     now_ms();
 void    push(t_dongle   *dongle, t_waiter   w);
 int pop(t_dongle  *dongle);
 int extract_min(t_dongle *dongle);
+void    params_initialisation(t_shared  *shared, t_coder    *coders, t_dongle   *dongles);
 
 
 #endif

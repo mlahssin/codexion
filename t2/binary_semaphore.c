@@ -39,6 +39,4 @@ int main()
     }
 
     sem_destroy(&semaphore);
-
-
 }

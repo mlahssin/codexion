@@ -39,7 +39,7 @@ void    coders_init(t_coder *coders, t_shared  *shared)
 }
 
 
-void    sim_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles)
+void    shared_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles)
 {
     shared->dongles = dongles;
     shared->coders = coders;
@@ -47,4 +47,12 @@ void    sim_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles)
     shared->stop = 0;
     pthread_mutex_init(&shared->print_mutex, NULL);
     pthread_mutex_init(&shared->stop_mutex, NULL); 
+}
+
+void    params_initialisation(t_shared  *shared, t_coder    *coders, t_dongle   *dongles)
+{
+   dongle_init(shared);
+    coders_init(coders, shared);
+    shared_init(shared, coders, dongles);
+
 }
