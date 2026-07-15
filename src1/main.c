@@ -39,7 +39,7 @@ void    smart_sleep(int time, t_shared *shared)
     {
         if(get_stop(shared) == 1)
             break;
-        if ( elapsed_time(shared->start) >= start + time / 1000)//check this
+        if ( elapsed_time(shared->start) >= start + time)//check this
             break;
         usleep(1000);
     }
@@ -53,8 +53,9 @@ bool is_dongle_available(t_dongle   *dongle)
     return value == -1;
 }
 
-bool    cooldown_finished(t_dongle   *dongle, int start)
+bool    cooldown_finished(t_dongle   *dongle, long long start)
 {
+    // printf("now : %lld cooldown finished at : %lld\n",elapsed_time(start), dongle->released_at);
     return elapsed_time(start) >= dongle->released_at;
 }
 
@@ -110,8 +111,13 @@ bool    all_coders_done_compiling(t_coder   *coders, int num_coders)
     int i = 0;
         while(i < num_coders)
         {
+            pthread_mutex_lock(&coders[i].compile_count_mutex);
             if (coders[i].compile_count < coders[i].shared->params.num_compiles)
+            {
+                pthread_mutex_unlock(&coders[i].compile_count_mutex);
                 return false;
+            }
+             pthread_mutex_unlock(&coders[i].compile_count_mutex);
             i++;
         }
     return true;
@@ -121,10 +127,16 @@ bool    all_coders_done_compiling(t_coder   *coders, int num_coders)
 int    is_burnout(t_coder  *coders, int num_coders)
 {
     int i = 0;
+    
     while (i < num_coders)
     {
+        pthread_mutex_lock(&coders[i].compile_count_mutex);
         if(coders[i].last_compile_start + coders[i].shared->params.time_to_burnout <= elapsed_time(coders[i].shared->start))
+        {
+            pthread_mutex_unlock(&coders[i].compile_count_mutex);
             return coders[i].id;
+        }
+        pthread_mutex_unlock(&coders[i].compile_count_mutex);
         i++;
     }
     return -1;
@@ -153,7 +165,11 @@ void    push_coder_to_dongle_heap(t_dongle *dongle, t_coder    *coder)
     if (coder->shared->params.scheduler_type == 0)
         w.prioroty = now_ms();
     else
+    {
+        pthread_mutex_lock(&coder->compile_count_mutex);
         w.prioroty = coder->last_compile_start + coder->shared->params.time_to_burnout;
+        pthread_mutex_unlock(&coder->compile_count_mutex);
+    }
     pthread_mutex_lock(&dongle->dongle_mutex);
     if (get_stop(coder->shared)!= 0)
     {
@@ -172,7 +188,7 @@ bool    is_only_cooldown_left(t_dongle *dongle, t_coder    *coder)
 
 bool    can_coder_take_dongle(t_dongle *dongle, t_coder    *coder)
 {
-    return(is_dongle_available(dongle)  && extract_min(dongle) == coder->id && cooldown_finished(dongle, coder->shared->start));
+    return(is_dongle_available(dongle) && extract_min(dongle) == coder->id && cooldown_finished(dongle, coder->shared->start));
 }
 
 void    build_timeout_ts(struct timespec *ts, long long ms_from_now)
@@ -206,17 +222,16 @@ void    print_dongles_taken(t_coder    *coder)
 }
 void    take_dongle(t_dongle *dongle, t_coder    *coder)
 {
-    pthread_mutex_lock(&dongle->dongle_mutex);
     struct timespec ts;
     long long time_left;
 
-    time_left = dongle->released_at - elapsed_time(coder->shared->start);
-    build_timeout_ts(&ts, time_left);
+    pthread_mutex_lock(&dongle->dongle_mutex);
     while(get_stop(coder->shared) == 0)
     {
         if(can_coder_take_dongle(dongle, coder))
         {  
             dongle->used = coder->id;
+            
             coder->num_dongles_held++;
             pop(dongle);
             pthread_cond_broadcast(&dongle->dongle_wait);
@@ -225,7 +240,11 @@ void    take_dongle(t_dongle *dongle, t_coder    *coder)
             return;
         }
         else if(is_only_cooldown_left(dongle, coder))
+        {
+            time_left = dongle->released_at - elapsed_time(coder->shared->start);
+            build_timeout_ts(&ts, time_left);
             pthread_cond_timedwait(&dongle->dongle_wait, &dongle->dongle_mutex, &ts);
+        }
         else
             pthread_cond_wait(&dongle->dongle_wait, &dongle->dongle_mutex);
     }
@@ -233,7 +252,7 @@ void    take_dongle(t_dongle *dongle, t_coder    *coder)
 }
 
 
-void    require_dongles(t_coder    *coder)
+void    aquire_dongles(t_coder    *coder)
 {
     push_coder_to_dongle_heap(&coder->shared->dongles[coder->dongle_index_1], coder);
     take_dongle(&coder->shared->dongles[coder->dongle_index_1], coder);
@@ -245,21 +264,25 @@ void    require_dongles(t_coder    *coder)
 void    compile_phase(t_coder *coder)
 {
     print_lock(coder->id, 1,coder->shared);
+    pthread_mutex_lock(&coder->compile_count_mutex);
     coder->last_compile_start = elapsed_time(coder->shared->start);
-    smart_sleep(coder->shared->params.time_to_compile * 1000, coder->shared);
+    pthread_mutex_unlock(&coder->compile_count_mutex);
+    smart_sleep(coder->shared->params.time_to_compile, coder->shared);
+    pthread_mutex_lock(&coder->compile_count_mutex);
     coder->compile_count++;
+    pthread_mutex_unlock(&coder->compile_count_mutex);
 }
 
 void    debug_phase(t_coder *coder)
 {
     print_lock(coder->id, 2,coder->shared);
-    smart_sleep(coder->shared->params.time_to_debug * 1000, coder->shared);  
+    smart_sleep(coder->shared->params.time_to_debug, coder->shared);  
 }
 
 void    refactor_phase(t_coder  *coder)
 {
     print_lock(coder->id, 3,coder->shared);
-    smart_sleep(coder->shared->params.time_to_refactor * 1000, coder->shared);
+    smart_sleep(coder->shared->params.time_to_refactor, coder->shared);
 }
 
 void    release_both_dongles(t_coder *coder)
@@ -274,7 +297,7 @@ void    *routine(void    *arg)
 
     while(get_stop(coder->shared) == 0)
     {
-        require_dongles(coder);
+        aquire_dongles(coder);
 
         if(get_stop(coder->shared) == 1)
             return NULL;
@@ -320,15 +343,21 @@ void    *monitoring(void *arg)
     }
     return NULL;
 }
-// void    params_allocation(t_coder   *coders, t_dongle   *dongles, pthread_t *coders_ths, t_shared   shared)
-// {
-//     coders_ths = malloc(sizeof(pthread_t) * shared.params.num_coders);
-//     coders = malloc(sizeof(pthread_t) * shared.params.num_coders);
-//     dongles = malloc(sizeof(t_dongle) * shared.params.num_coders);
-// }
+void    params_allocation(t_coder   *coders, t_dongle   *dongles, pthread_t *coders_ths, t_shared   shared)
+{
+    coders_ths = malloc(sizeof(pthread_t) * shared.params.num_coders);
+    coders = malloc(sizeof(pthread_t) * shared.params.num_coders);
+    dongles = malloc(sizeof(t_dongle) * shared.params.num_coders);
+}
+
 int main(int ac, char *av[])
 {
     t_shared   shared;
+    // pthread_t    monitor;
+    // pthread_t *coder_ths;
+    // t_coder *coders;
+    // t_dongle   *dongles;
+    
     if (!parse(ac, av, &shared.params))
     {
         write(2, "Error\n", 6);
@@ -361,6 +390,10 @@ int main(int ac, char *av[])
     pthread_join(monitor, NULL);
 
     // function for the clean destroys and the frees
+    for (int i = 0; i < shared.params.num_coders; i++)
+    {
+        pthread_mutex_destroy(&shared.coders[i].compile_count_mutex);
+    }
     for (int i = 0; i < shared.params.num_coders; i++)
     {
         pthread_mutex_destroy(&shared.dongles[i].dongle_mutex);

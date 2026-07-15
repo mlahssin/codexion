@@ -32,6 +32,7 @@ void    coders_init(t_coder *coders, t_shared  *shared)
             coders[i].dongle_index_2 = i;
         }
         coders[i].compile_count = 0;
+        pthread_mutex_init(&coders[i].compile_count_mutex, NULL);
         coders[i].last_compile_start = 0;
         coders[i].shared = shared;
         coders[i].num_dongles_held = 0;

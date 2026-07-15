@@ -45,7 +45,7 @@ typedef struct  s_waiter
 typedef struct  s_dongle
 {
     int used;
-    int released_at;
+    long long released_at;
     pthread_mutex_t dongle_mutex;
     t_waiter    waiters[2];  
     int size;
@@ -71,6 +71,7 @@ typedef struct  s_coder
     int dongle_index_1;
     int dongle_index_2;
     int compile_count;
+    pthread_mutex_t compile_count_mutex;
     int last_compile_start;
     int num_dongles_held;
     t_shared   *shared;

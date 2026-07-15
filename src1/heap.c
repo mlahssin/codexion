@@ -103,27 +103,6 @@ void    shift_down(t_dongle *dongle)
     {
         left_child = 2 * i + 1;
         right_child = 2 * i + 2;
-        // smallest = i;
-        // if(left_child < dongle->size && dongle->waiters[left_child].prioroty <= dongle->waiters[smallest].prioroty)
-        // {
-        //     if (dongle->waiters[left_child].prioroty == dongle->waiters[smallest].prioroty)
-        //     {
-        //         if (dongle->waiters[left_child].coder_id < dongle->waiters[smallest].coder_id)
-        //             smallest = left_child;
-        //     }
-        //     else
-        //         smallest = left_child;
-        // }
-        // if(right_child < dongle->size && dongle->waiters[right_child].prioroty <= dongle->waiters[smallest].prioroty)
-        // {
-        //     if (dongle->waiters[right_child].prioroty == dongle->waiters[smallest].prioroty)
-        //     {
-        //         if (dongle->waiters[right_child].coder_id < dongle->waiters[smallest].coder_id)
-        //             smallest = right_child;
-        //     }
-        //     else
-        //         smallest = right_child;
-        // }
         smallest = find_smallest(dongle, i, left_child, right_child);
         if(smallest == i)
             break;
