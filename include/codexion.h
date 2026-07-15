@@ -72,6 +72,7 @@ typedef struct  s_coder
     int dongle_index_2;
     int compile_count;
     int last_compile_start;
+    int num_dongles_held;
     t_shared   *shared;
 
 }t_coder;

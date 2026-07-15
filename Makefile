@@ -3,8 +3,8 @@ NAME    = codexion
 CC      = cc
 
 
-# CFLAGS  = -Wall -Wextra -Werror -pthread  -I include
-CFLAGS  =  -pthread  -g -I include
+CFLAGS  = -Wall -Wextra -Werror -pthread  -I include
+# CFLAGS  =  -pthread  -g -I include
 # - I include means“Add the include/ directory to the compiler's header search path.”
 SRCS    =  src1/main.c \
            src1/parsing.c \

@@ -28,8 +28,13 @@ void    buble_up(t_dongle *dongle, int index)
     while (i > 0)
     {
         parent = (i - 1) / 2;
-        if (dongle->waiters[i].prioroty < dongle->waiters[parent].prioroty)
+        if (dongle->waiters[i].prioroty <= dongle->waiters[parent].prioroty)
         {
+            if (dongle->waiters[i].prioroty == dongle->waiters[parent].prioroty)
+            {
+                if (dongle->waiters[parent].coder_id < dongle->waiters[i].coder_id)
+                    break;
+            }
             swap(&dongle->waiters[i], &dongle->waiters[parent]);
             i = parent;
         }
@@ -40,16 +45,10 @@ void    buble_up(t_dongle *dongle, int index)
 
 void    push(t_dongle   *dongle, t_waiter   w)
 {
-    //if fifo : 0
-    // prioroty : come first : elapsed time
-    //if edf: 1
-    //priorority:
-    //coder last compile start + time_burnout
     if (dongle->size < 2)
     {
         if (is_empty(dongle))
         {
-            // printf("hello\n");
             dongle->waiters[0] = w;
             dongle->size++;
             return;            
@@ -57,15 +56,14 @@ void    push(t_dongle   *dongle, t_waiter   w)
         dongle->waiters[dongle->size] = w;
 
         dongle->size++;
-        int i = dongle->size - 1;
+        // int i = dongle->size - 1;
         buble_up(dongle, dongle->size - 1);
     }
     else
         return;
-    // printf("%d\n", dongle->size);
 }
 
-void    shif_down(t_dongle *dongle)
+void    shift_down(t_dongle *dongle)
 {
     int i = 0;
     int left_child;
@@ -79,19 +77,27 @@ void    shif_down(t_dongle *dongle)
         int smallest = i;
         if(left_child < dongle->size && dongle->waiters[left_child].prioroty <= dongle->waiters[smallest].prioroty)
         {
-            // if (dongle->waiters[left_child].prioroty == dongle->waiters[smallest].prioroty)
-            // {
-            //     if (dongle->waiters[left_child].coder_id < dongle->waiters[smallest].coder_id)
-            //     {
-            //         smallest = left_child;
-            //     }
-            // }
-            // else
-            smallest = left_child;
+            if (dongle->waiters[left_child].prioroty == dongle->waiters[smallest].prioroty)
+            {
+                if (dongle->waiters[left_child].coder_id < dongle->waiters[smallest].coder_id)
+                {
+                    smallest = left_child;
+                }
+            }
+            else
+                smallest = left_child;
         }
         if(right_child < dongle->size && dongle->waiters[right_child].prioroty <= dongle->waiters[smallest].prioroty)
         {
-            smallest = right_child;
+            if (dongle->waiters[right_child].prioroty == dongle->waiters[smallest].prioroty)
+            {
+                if (dongle->waiters[right_child].coder_id < dongle->waiters[smallest].coder_id)
+                {
+                    smallest = right_child;
+                }
+            }
+            else
+                smallest = right_child;
         }
         if(smallest == i)
             break;
@@ -101,9 +107,11 @@ void    shif_down(t_dongle *dongle)
 
 int pop(t_dongle  *dongle)
 {
+    int value;
+
     if(is_empty(dongle))
         return -1;
-    int value;
+
     if (dongle->size == 1)
     {
         value  = extract_min(dongle);
@@ -114,7 +122,7 @@ int pop(t_dongle  *dongle)
     value = extract_min(dongle);
     dongle->waiters[0] = dongle->waiters[dongle->size - 1];
     dongle->size--;
-    shif_down(dongle);
+    shift_down(dongle);
     return  value;
 }
 

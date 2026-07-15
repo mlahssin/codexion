@@ -20,13 +20,10 @@ void    coders_init(t_coder *coders, t_shared  *shared)
     for (int i = 0; i < shared->params.num_coders; i++)
     {
         coders[i].id = i;
-
         if(i % 2 == 0)
         {
-
             coders[i].dongle_index_1 = i;
             coders[i].dongle_index_2 = (i + 1) % (shared->params.num_coders);
-
         }
         else
         {
@@ -34,26 +31,19 @@ void    coders_init(t_coder *coders, t_shared  *shared)
             coders[i].dongle_index_1 = (i + 1) % (shared->params.num_coders);
             coders[i].dongle_index_2 = i;
         }
-
         coders[i].compile_count = 0;
         coders[i].last_compile_start = 0;
         coders[i].shared = shared;
+        coders[i].num_dongles_held = 0;
     }
 }
 
-// int now_ms()
-// {
-//     struct timeval now;
-//     gettimeofday(&now, NULL);
-//     return  now.tv_sec * 1000 + now.tv_usec / 1000;
-// }
 
 void    sim_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles)
 {
     shared->dongles = dongles;
     shared->coders = coders;
     shared->start = now_ms();
-    // printf("shared->start : %lld\n", shared->start);
     shared->stop = 0;
     pthread_mutex_init(&shared->print_mutex, NULL);
     pthread_mutex_init(&shared->stop_mutex, NULL); 
