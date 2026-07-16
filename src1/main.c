@@ -4,11 +4,13 @@ void    set_stop(t_shared  *shared)
 {
     pthread_mutex_lock(&shared->stop_mutex);
     shared->stop = 1;
+    pthread_mutex_unlock(&shared->stop_mutex);
     for (int i = 0; i < shared->params.num_coders; i++)
     {
+        pthread_mutex_lock(&shared->dongles[i].dongle_mutex);
         pthread_cond_broadcast(&shared->dongles[i].dongle_wait);
+        pthread_mutex_unlock(&shared->dongles[i].dongle_mutex);
     }
-    pthread_mutex_unlock(&shared->stop_mutex);
 }
 
 int    get_stop(t_shared  *shared)
@@ -55,7 +57,6 @@ bool is_dongle_available(t_dongle   *dongle)
 
 bool    cooldown_finished(t_dongle   *dongle, long long start)
 {
-    // printf("now : %lld cooldown finished at : %lld\n",elapsed_time(start), dongle->released_at);
     return elapsed_time(start) >= dongle->released_at;
 }
 
@@ -142,16 +143,20 @@ int    is_burnout(t_coder  *coders, int num_coders)
     return -1;
 }
 
-void    release_dongle(t_dongle *dongle, t_shared  *shared)
+void    release_dongle(t_dongle *dongle, t_coder  *coder)
 {
     pthread_mutex_lock(&dongle->dongle_mutex);
-    if (get_stop(shared) != 0)
+    if (get_stop(coder->shared) != 0)
     {
         pthread_mutex_unlock(&dongle->dongle_mutex);
         return;
     }
     dongle->used = -1;
-    dongle->released_at = elapsed_time(shared->start) + shared->params.cooldown;
+    dongle->released_at = elapsed_time(coder->shared->start) + coder->shared->params.cooldown;
+    pthread_mutex_lock(&coder->compile_count_mutex);
+    coder->num_dongles_held--;
+    pthread_mutex_unlock(&coder->compile_count_mutex);
+    
     pthread_cond_broadcast(&dongle->dongle_wait);
     pthread_mutex_unlock(&dongle->dongle_mutex);
 }
@@ -287,8 +292,8 @@ void    refactor_phase(t_coder  *coder)
 
 void    release_both_dongles(t_coder *coder)
 {
-    release_dongle(&coder->shared->dongles[coder->dongle_index_1], coder->shared);
-    release_dongle(&coder->shared->dongles[coder->dongle_index_2], coder->shared);
+    release_dongle(&coder->shared->dongles[coder->dongle_index_1], coder);
+    release_dongle(&coder->shared->dongles[coder->dongle_index_2], coder);
 }
 
 void    *routine(void    *arg)
@@ -339,23 +344,49 @@ void    *monitoring(void *arg)
             set_stop(shared);
             return NULL;
         }
-        smart_sleep(1000, shared); 
+        smart_sleep(1, shared); 
     }
     return NULL;
 }
-void    params_allocation(t_coder   *coders, t_dongle   *dongles, pthread_t *coders_ths, t_shared   shared)
+int    params_allocation(t_coder   **coders, t_dongle   **dongles, pthread_t **coders_ths, t_shared   shared)
 {
-    coders_ths = malloc(sizeof(pthread_t) * shared.params.num_coders);
-    coders = malloc(sizeof(pthread_t) * shared.params.num_coders);
-    dongles = malloc(sizeof(t_dongle) * shared.params.num_coders);
+    *coders_ths = malloc(sizeof(pthread_t) * shared.params.num_coders);
+    *coders = malloc(sizeof(t_coder) * shared.params.num_coders);
+    *dongles = malloc(sizeof(t_dongle) * shared.params.num_coders);
+    if (!*dongles || !*coders || !*coders_ths)
+    {
+        free(*dongles);
+        free(*coders);
+        free(*coders_ths);
+        return 1;
+    }
+    return 0;
 }
 
+void    clean(t_shared  *shared, t_coder    *coders, pthread_t  *coders_threads)
+{
+    for (int i = 0; i < shared->params.num_coders; i++)
+    {
+        pthread_mutex_destroy(&shared->coders[i].compile_count_mutex);
+    }
+    for (int i = 0; i < shared->params.num_coders; i++)
+    {
+        pthread_mutex_destroy(&shared->dongles[i].dongle_mutex);
+        pthread_cond_destroy(&shared->dongles[i].dongle_wait);
+
+    }
+    pthread_mutex_destroy(&shared->print_mutex);
+    pthread_mutex_destroy(&shared->stop_mutex);
+    free(shared->dongles);
+    free(coders);
+    free(coders_threads);
+}
 int main(int ac, char *av[])
 {
     t_shared   shared;
-    // pthread_t    monitor;
-    // pthread_t *coder_ths;
-    // t_coder *coders;
+    pthread_t    monitor;
+    pthread_t *coder_ths;
+    t_coder *coders;
     // t_dongle   *dongles;
     
     if (!parse(ac, av, &shared.params))
@@ -363,46 +394,39 @@ int main(int ac, char *av[])
         write(2, "Error\n", 6);
         return (1);
     }
-    // params allocation:
-    pthread_t    monitor;
-    pthread_t *coder_ths = malloc(sizeof(pthread_t) * shared.params.num_coders);
-
-    t_coder *coders = malloc(sizeof(t_coder ) * shared.params.num_coders);
-    t_dongle   *dongles = malloc(sizeof(t_dongle) * shared.params.num_coders);
-    shared.dongles = dongles;
-    //function for the initialisation part:
-    // dongle_init(&shared);
-    // coders_init(coders, &shared);
-    // shared_init(&shared, coders, dongles);
-    params_initialisation(&shared, coders, dongles);
+    coder_ths = NULL;
+    coders = NULL;
+    // dongles = NULL;
+    if (params_allocation(&coders, &shared.dongles, &coder_ths, shared) == 1)
+        return -1;
+    // shared.dongles = dongles;
+    params_initialisation(&shared, coders, shared.dongles);
     // function for the threads creation
-    pthread_create(&monitor, NULL, monitoring, (void *)&shared);
-    for (int i = 0; i < shared.params.num_coders; i++)
+    if (pthread_create(&monitor, NULL, monitoring, (void *)&shared) != 0)
     {
-        pthread_create(coder_ths + i, NULL, routine, (void *)&coders[i]);
-    }
-
-    // functoin for threads join 
-    for (int i = 0; i < shared.params.num_coders; i++)
-    {
-        pthread_join(coder_ths[i], NULL);
-    }
-    pthread_join(monitor, NULL);
-
-    // function for the clean destroys and the frees
-    for (int i = 0; i < shared.params.num_coders; i++)
-    {
-        pthread_mutex_destroy(&shared.coders[i].compile_count_mutex);
+        clean(&shared, coders, coder_ths);
+        return -1;    
     }
     for (int i = 0; i < shared.params.num_coders; i++)
     {
-        pthread_mutex_destroy(&shared.dongles[i].dongle_mutex);
-        pthread_cond_destroy(&shared.dongles[i].dongle_wait);
-
+        if (pthread_create(coder_ths + i, NULL, routine, (void *)&coders[i]) != 0)
+        {
+            clean(&shared, coders, coder_ths);
+            return -1;
+        }
+    } 
+    for (int i = 0; i < shared.params.num_coders; i++)
+    {
+        if (pthread_join(coder_ths[i], NULL) != 0)
+        {
+            clean(&shared, coders, coder_ths);
+            return -1;
+        }
     }
-    pthread_mutex_destroy(&shared.print_mutex);
-    pthread_mutex_destroy(&shared.stop_mutex);
-    free(coder_ths);
-    free(coders);
-    free(dongles);
+    if (pthread_join(monitor, NULL) != 0)
+    {
+        clean(&shared, coders, coder_ths);
+        return -1;
+    }
+    clean(&shared, coders, coder_ths);
 }

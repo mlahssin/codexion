@@ -3,8 +3,8 @@ NAME    = codexion
 CC      = cc
 
 
-# CFLAGS  = -Wall -Wextra -Werror -pthread  -I include
-CFLAGS  = -Wall -Wextra -Werror -I include
+CFLAGS  = -Wall -Wextra -Werror -pthread  -I include
+# CFLAGS  = -Wall -Wextra -Werror -I include
 SRCS    =  src1/main.c \
            src1/parsing.c \
  		   src1/params_init.c\

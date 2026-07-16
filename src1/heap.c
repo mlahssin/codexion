@@ -107,6 +107,7 @@ void    shift_down(t_dongle *dongle)
         if(smallest == i)
             break;
         swap(&dongle->waiters[i], &dongle->waiters[smallest]);
+        i = smallest;
     }
 }
 

@@ -10,6 +10,7 @@ void    dongle_init(t_shared   *shared)
         shared->dongles[i].released_at = 0;
         pthread_mutex_init(&shared->dongles[i].dongle_mutex, NULL);
         pthread_cond_init(&shared->dongles[i].dongle_wait, NULL);
+        
         shared->dongles[i].size = 0;
     }
 }
@@ -33,6 +34,7 @@ void    coders_init(t_coder *coders, t_shared  *shared)
         }
         coders[i].compile_count = 0;
         pthread_mutex_init(&coders[i].compile_count_mutex, NULL);
+
         coders[i].last_compile_start = 0;
         coders[i].shared = shared;
         coders[i].num_dongles_held = 0;

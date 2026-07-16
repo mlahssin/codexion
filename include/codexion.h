@@ -31,7 +31,7 @@ typedef struct  s_params
 typedef struct  s_waiter
 {
     int coder_id;
-    int prioroty;
+    long long prioroty;
 }t_waiter;
 
 
