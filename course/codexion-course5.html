@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codexion Course 5: Mutexes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f14; --bg-elev:#12151c; --bg-card:#171b24; --border:#252b38;
+  --text:#e7e9ee; --text-dim:#9aa3b5; --text-faint:#5c6478;
+  --accent-take:#5ee6ff;   /* has taken a dongle */
+  --accent-compile:#4f8cff; /* compiling */
+  --accent-debug:#ffb454;   /* debugging */
+  --accent-refactor:#b98eff;/* refactoring */
+  --accent-burnout:#ff5470; /* burned out */
+  --mono:'IBM Plex Mono', monospace;
+  --sans:'Inter', sans-serif;
+  --radius:10px;
+}
+html[data-theme="light"]{
+  --bg:#f5f6f8; --bg-elev:#ffffff; --bg-card:#ffffff; --border:#dde1e8;
+  --text:#191c22; --text-dim:#565f70; --text-faint:#8890a0;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  line-height:1.65; font-size:16px; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent-compile);}
+code, .mono{font-family:var(--mono);}
+
+/* ---------- Progress bar ---------- */
+#progress-bar{position:fixed; top:0; left:0; height:3px; background:linear-gradient(90deg,var(--accent-take),var(--accent-compile),var(--accent-debug),var(--accent-refactor)); width:0%; z-index:1000; transition:width .1s linear;}
+
+/* ---------- Layout ---------- */
+#app{display:flex; min-height:100vh;}
+#sidebar{
+  width:300px; flex-shrink:0; background:var(--bg-elev); border-right:1px solid var(--border);
+  position:sticky; top:0; height:100vh; overflow-y:auto; padding:20px 0 60px;
+}
+#sidebar .brand{padding:0 20px 16px; border-bottom:1px solid var(--border); margin-bottom:12px;}
+#sidebar .brand-title{font-family:var(--mono); font-weight:700; font-size:1.05rem; letter-spacing:.02em;}
+#sidebar .brand-sub{color:var(--text-faint); font-size:.78rem; margin-top:4px;}
+#theme-toggle{
+  margin-top:12px; background:var(--bg-card); border:1px solid var(--border); color:var(--text);
+  padding:6px 12px; border-radius:20px; font-size:.75rem; cursor:pointer; font-family:var(--mono);
+}
+.nav-chapter{border-bottom:1px solid var(--border);}
+.nav-chapter-head{
+  display:flex; align-items:center; gap:10px; padding:10px 20px; cursor:pointer; user-select:none;
+  font-size:.86rem; color:var(--text-dim); transition:color .15s;
+}
+.nav-chapter-head:hover{color:var(--text);}
+.nav-chapter-head .num{font-family:var(--mono); color:var(--text-faint); font-size:.75rem; width:20px; flex-shrink:0;}
+.nav-chapter-head .arrow{margin-left:auto; transition:transform .2s; font-size:.7rem; color:var(--text-faint);}
+.nav-chapter.open .arrow{transform:rotate(90deg);}
+.nav-sections{max-height:0; overflow:hidden; transition:max-height .25s ease;}
+.nav-chapter.open .nav-sections{max-height:500px;}
+.nav-sections a{
+  display:block; padding:6px 20px 6px 50px; font-size:.8rem; color:var(--text-faint);
+  text-decoration:none; border-left:2px solid transparent;
+}
+.nav-sections a:hover, .nav-sections a.active{color:var(--accent-compile); border-left-color:var(--accent-compile);}
+
+#main{flex:1; min-width:0; max-width:900px; margin:0 auto; padding:60px 48px 160px;}
+
+/* ---------- Hero ---------- */
+.hero{padding:20px 0 50px; border-bottom:1px solid var(--border); margin-bottom:50px;}
+.hero-eyebrow{font-family:var(--mono); font-size:.78rem; color:var(--accent-take); letter-spacing:.08em; text-transform:uppercase; margin-bottom:14px;}
+.hero h1{font-family:var(--mono); font-size:2.4rem; font-weight:700; line-height:1.15; margin-bottom:16px;}
+.hero p.lead{color:var(--text-dim); font-size:1.08rem; max-width:640px; margin-bottom:32px;}
+.legend{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:36px;}
+.legend .chip{
+  display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:.76rem;
+  padding:6px 12px; border-radius:20px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-dim);
+}
+.legend .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+
+/* ---------- Chapter content ---------- */
+.chapter{margin-bottom:90px; scroll-margin-top:20px;}
+.chapter-label{font-family:var(--mono); color:var(--text-faint); font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px;}
+.chapter h2{font-family:var(--mono); font-size:1.9rem; margin-bottom:26px; padding-bottom:16px; border-bottom:1px solid var(--border);}
+.section{scroll-margin-top:20px; margin-bottom:44px;}
+.section h3{font-size:1.25rem; margin-bottom:14px; font-weight:700;}
+.section h4{font-size:1.02rem; margin:20px 0 10px; font-weight:700; color:var(--text-dim);}
+.section p{margin-bottom:14px; max-width:70ch;}
+.section ul, .section ol{margin:0 0 14px 22px;}
+.section li{margin-bottom:6px;}
+
+.why-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-take);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.why-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-take); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.codexion-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-refactor);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.codexion-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-refactor); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.analogy-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-debug);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.analogy-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+pre{
+  background:#08090c; border:1px solid var(--border); border-radius:8px; padding:16px 18px;
+  overflow-x:auto; margin:16px 0; font-size:.86rem; line-height:1.55;
+}
+html[data-theme="light"] pre{background:#f0f1f4;}
+pre code{font-family:var(--mono); color:#c8ccd8;}
+html[data-theme="light"] pre code{color:#2b2f3a;}
+.log-line{display:block;}
+.log-ts{color:var(--text-faint);}
+.log-take{color:var(--accent-take);}
+.log-compile{color:var(--accent-compile);}
+.log-debug{color:var(--accent-debug);}
+.log-refactor{color:var(--accent-refactor);}
+.log-burnout{color:var(--accent-burnout); font-weight:600;}
+
+.expandable{border:1px solid var(--border); border-radius:8px; margin:16px 0; overflow:hidden;}
+.expandable summary{
+  padding:13px 18px; cursor:pointer; font-weight:600; font-size:.92rem; background:var(--bg-card);
+  list-style:none; display:flex; align-items:center; gap:10px;
+}
+.expandable summary::-webkit-details-marker{display:none;}
+.expandable summary::before{content:'+'; font-family:var(--mono); color:var(--accent-compile); font-weight:700;}
+.expandable[open] summary::before{content:'−';}
+.expandable .body{padding:16px 18px; border-top:1px solid var(--border);}
+
+svg{max-width:100%; height:auto;}
+.diagram-wrap{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:24px; margin:20px 0; text-align:center;}
+.diagram-caption{font-size:.82rem; color:var(--text-faint); margin-top:10px; font-family:var(--mono);}
+
+/* ---------- Quiz ---------- */
+.quiz{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:22px 24px; margin:20px 0;}
+.quiz .q-title{font-family:var(--mono); font-size:.75rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px;}
+.quiz .q-text{font-weight:600; margin-bottom:14px;}
+.quiz .opts{display:flex; flex-direction:column; gap:8px;}
+.quiz button.opt{
+  text-align:left; padding:11px 14px; background:var(--bg-elev); border:1px solid var(--border); border-radius:7px;
+  color:var(--text); cursor:pointer; font-family:var(--sans); font-size:.92rem; transition:.15s;
+}
+.quiz button.opt:hover{border-color:var(--accent-compile);}
+.quiz button.opt.correct{border-color:#3ecf8e; background:rgba(62,207,142,.12);}
+.quiz button.opt.wrong{border-color:var(--accent-burnout); background:rgba(255,84,112,.12);}
+.quiz .feedback{margin-top:12px; font-size:.88rem; color:var(--text-dim); display:none;}
+.quiz .feedback.show{display:block;}
+
+/* ---------- Exercises ---------- */
+.exercises{background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:24px 26px; margin-top:30px;}
+.exercises h4{font-family:var(--mono); font-size:.8rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;}
+.ex-group{margin-top:16px;}
+.ex-group .ex-label{font-size:.78rem; color:var(--accent-take); font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;}
+.ex-group ol{margin-left:20px;}
+.ex-group li{margin-bottom:8px; color:var(--text-dim); font-size:.94rem;}
+
+table{width:100%; border-collapse:collapse; margin:16px 0; font-size:.9rem;}
+th,td{border:1px solid var(--border); padding:8px 12px; text-align:left;}
+th{background:var(--bg-card); font-family:var(--mono); font-size:.78rem; text-transform:uppercase;}
+
+.nav-footer{display:flex; justify-content:space-between; margin-top:60px; padding-top:24px; border-top:1px solid var(--border);}
+.nav-footer a{font-family:var(--mono); font-size:.85rem; text-decoration:none; color:var(--text-dim); display:flex; flex-direction:column;}
+.nav-footer a:hover{color:var(--accent-compile);}
+.nav-footer .lbl{font-size:.7rem; color:var(--text-faint); text-transform:uppercase; margin-bottom:4px;}
+
+@media (max-width:860px){
+  #sidebar{position:fixed; left:-300px; z-index:900; transition:left .2s; box-shadow:0 0 40px rgba(0,0,0,.4);}
+  #sidebar.open{left:0;}
+  #main{padding:60px 20px 120px; max-width:100%;}
+  #menu-btn{display:flex !important;}
+}
+#menu-btn{
+  display:none; position:fixed; top:16px; left:16px; z-index:950; width:40px; height:40px;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:8px; color:var(--text);
+  align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem;
+}
+</style>
+</head>
+<body>
+<div id="progress-bar"></div>
+<div id="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</div>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="brand">
+      <div class="brand-title">// codexion — course 5</div>
+      <div class="brand-sub">Mutexes</div>
+      <button id="theme-toggle" onclick="toggleTheme()">☀ light mode</button>
+    </div>
+    <div id="nav-list"></div>
+  </nav>
+
+  <main id="main">
+
+    <section class="hero">
+      <div class="hero-eyebrow">Course 5 of the Codexion series</div>
+      <h1>Mutexes</h1>
+      <p class="lead">A mutex looks like the simplest thing in concurrent programming: lock, do the work, unlock. Underneath it is a compare-and-swap instruction, a kernel hash table of sleeping threads, a fast path that never enters the kernel at all, and a set of guarantees that go well beyond "one at a time." This course opens all of it — and, critically, shows you exactly what a mutex <em>cannot</em> do, which is why Codexion makes you build a scheduler on top of one.</p>
+      <div class="legend">
+        <div class="chip"><span class="dot" style="background:var(--accent-take)"></span> has taken a dongle</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-compile)"></span> compiling</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-debug)"></span> debugging</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-refactor)"></span> refactoring</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-burnout)"></span> burned out</div>
+      </div>
+      <div class="diagram-wrap" id="hero-diagram"></div>
+      <div class="diagram-caption">The Codexion hub: N coders in a circle, N dongles between them, one shared Quantum Compiler in the center.</div>
+    </section>
+
+    <div id="chapters-root">
+
+    <!-- ============ CHAPTER 1 ============ -->
+    <section class="chapter" id="ch1">
+      <div class="chapter-label">Chapter 01</div>
+      <h2>Why mutexes exist</h2>
+
+      <div class="section" id="ch1-s0">
+        <h3>1.1 &nbsp;The problem, stated precisely</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Threads share memory (Course 4). Sharing means two coder threads can execute conflicting read-modify-write sequences on the same dongle state, interleaved arbitrarily by the scheduler, producing lost updates and corrupted structs. You need a way to say: <em>"from here to here, exactly one thread at a time, no exceptions."</em> That region is a <strong>critical section</strong>, and a <strong>mutex</strong> (mutual exclusion lock) is the primitive that enforces it.</div>
+        <p>The contract is simple to state and surprisingly hard to implement correctly: at most one thread may hold the mutex at any instant; a thread attempting to lock a held mutex waits until it's free; unlocking releases it and lets exactly one waiter proceed.</p>
+      </div>
+
+      <div class="section" id="ch1-s1">
+        <h3>1.2 &nbsp;Why you can't just write it yourself with a flag</h3>
+        <p>The naive attempt fails immediately:</p>
+        <pre><code>// BROKEN — do not do this
+while (dongle-&gt;locked) { /* spin */ }
+dongle-&gt;locked = 1;      // ← two threads can both reach here
+/* critical section */
+dongle-&gt;locked = 0;</code></pre>
+        <p>The check and the set are two separate operations. Two threads can both read <code>locked == 0</code>, both fall out of the loop, and both set it to 1 — both now believe they hold the lock. This is precisely Course 4's lost-update race, applied to the lock itself. Fixing it requires hardware support: a single instruction that reads <em>and</em> writes atomically, with no window in between (Chapter 2).</p>
+        <div class="analogy-box"><span class="tag">Analogy — the single-occupancy room</span>
+        A mutex is a room with one key hanging outside. The rule "check if the key is there, then take it" only works if checking-and-taking is one indivisible motion. If two people can both glance at the hook and both reach for the key, you don't have a lock — you have two people in a one-person room, each certain they're alone.</div>
+      </div>
+
+      <div class="section" id="ch1-s2">
+        <h3>1.3 &nbsp;Two guarantees, not one</h3>
+        <p>A mutex provides both:</p>
+        <ul>
+          <li><strong>Mutual exclusion</strong> — the obvious one: one thread at a time in the critical section.</li>
+          <li><strong>Memory ordering</strong> (acquire/release, Course 4 Chapter 5) — the less obvious but equally load-bearing one: the next thread to acquire is guaranteed to see everything the previous holder wrote, in order, not a stale or reordered view.</li>
+        </ul>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        The subject's rule — "to prevent coders from duplicating dongles, you must protect each dongle's state with a mutex (<code>pthread_mutex_t</code>)" — is the direct application. "Duplicating a dongle" is exactly the lost-update race: two coders both observe a dongle free, both take it, and now one physical dongle is held twice. The mutex closes that window.</div>
+        <div id="ch1-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 1 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Explain, using the load/check/store breakdown, why a plain <code>while (locked) {} locked = 1;</code> spin-loop is not a working mutex.</li>
+          <li>What exactly does "a coder duplicated a dongle" mean at the level of shared memory operations?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 2 ============ -->
+    <section class="chapter" id="ch2">
+      <div class="chapter-label">Chapter 02</div>
+      <h2>Internal implementation</h2>
+
+      <div class="section" id="ch2-s0">
+        <h3>2.1 &nbsp;Compare-and-swap: the hardware primitive</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Chapter 1 showed that "check then set" must be indivisible. CPUs provide exactly this as a single instruction: <strong>compare-and-swap</strong> (CAS) — atomically compare a memory location to an expected value and, only if they match, write a new value; report whether it succeeded. On x86-64 this is <code>lock cmpxchg</code>; the <code>lock</code> prefix asserts exclusive ownership of the cache line for the duration (Course 4, Chapter 4).</div>
+        <pre><code>// The correct version of Chapter 1's broken loop:
+int expected = 0;
+if (atomic_compare_exchange_strong(&amp;lock_word, &amp;expected, 1)) {
+    /* we own the lock — no other thread could have slipped in */
+}</code></pre>
+        <p>There is no window between the compare and the swap. Either you observed 0 and wrote 1, atomically, or you didn't — no third outcome exists.</p>
+      </div>
+
+      <div class="section" id="ch2-s1">
+        <h3>2.2 &nbsp;Spinning vs. blocking</h3>
+        <p>CAS tells you whether you got the lock. It doesn't tell you what to do if you didn't. Two options:</p>
+        <table>
+          <tr><th></th><th>Spinning</th><th>Blocking</th></tr>
+          <tr><td>Behavior</td><td>Retry the CAS in a tight loop until it succeeds</td><td>Ask the kernel to put this thread to sleep until woken</td></tr>
+          <tr><td>Cost when the wait is very short</td><td>Cheap — no syscall, no context switch</td><td>Wasteful — you pay a syscall + 2 context switches to wait 50ns</td></tr>
+          <tr><td>Cost when the wait is long</td><td>Terrible — burns a whole core doing nothing for milliseconds</td><td>Cheap — the core runs other useful threads meanwhile</td></tr>
+        </table>
+        <div class="why-box"><span class="tag">The insight that produced futexes</span>
+        Neither answer is right for all cases — so the correct design is to do both: spin (or rather, just try the CAS) in userspace for the uncontended case, and only fall into the kernel when there's genuine contention worth sleeping through. That hybrid is exactly what a futex is (Chapter 3).</div>
+      </div>
+
+      <div class="section" id="ch2-s2">
+        <h3>2.3 &nbsp;Why pthread_mutex_t is 40 bytes</h3>
+        <p>If a mutex were just "one bit: locked or not," <code>sizeof(pthread_mutex_t)</code> would be tiny. On glibc/x86-64 it's 40 bytes, because it also carries:</p>
+        <ul>
+          <li>The futex word itself (the atomically-manipulated lock state)</li>
+          <li>The owner's thread ID — needed for error-checking mutexes and recursive mutexes (Chapter 7)</li>
+          <li>A recursion counter (for <code>PTHREAD_MUTEX_RECURSIVE</code>)</li>
+          <li>The mutex kind (normal / error-checking / recursive / adaptive)</li>
+          <li>Priority-inheritance bookkeeping (Chapter 6)</li>
+        </ul>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is the honest answer for your README's "thread synchronization mechanisms" section: a <code>pthread_mutex_t</code> guarding a dongle isn't an abstract "lock" — it's a futex word with a userspace CAS fast path, a kernel-mediated slow path, and owner/kind bookkeeping you inherit for free from glibc rather than hand-rolling.</div>
+        <div id="ch2-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 2 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why is <code>lock cmpxchg</code> a single instruction rather than a compare instruction followed by a move?</li>
+          <li>Under what contention profile is pure spinning actually a reasonable strategy, and when does it become actively harmful?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 3 ============ -->
+    <section class="chapter" id="ch3">
+      <div class="chapter-label">Chapter 03</div>
+      <h2>Futexes</h2>
+
+      <div class="section" id="ch3-s0">
+        <h3>3.1 &nbsp;Fast Userspace muTEX</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Before futexes, every mutex operation on Linux went through the kernel — even locking a mutex nobody else wanted. That's a syscall (hundreds of nanoseconds, a mode switch) for an operation that, in the uncontended case, needs nothing but one atomic instruction. The <strong>futex</strong> design flips the default: stay entirely in userspace unless there's actual contention worth involving the kernel for.</div>
+        <p>Hence the name: <strong>f</strong>ast <strong>u</strong>serspace mu<strong>tex</strong>. The kernel only learns a mutex exists at the moment someone actually has to wait on it.</p>
+      </div>
+
+      <div class="section" id="ch3-s1">
+        <h3>3.2 &nbsp;The fast path</h3>
+        <pre><code>// simplified pthread_mutex_lock() fast path
+int expected = 0;
+if (atomic_compare_exchange(&amp;futex_word, &amp;expected, 1))
+    return 0;   // acquired — ZERO syscalls, a few nanoseconds
+// otherwise: contended, fall through to the slow path</code></pre>
+        <p>In Codexion with generous timing parameters and low contention, the overwhelming majority of your dongle lock/unlock pairs never enter the kernel at all. This is why "I'm calling a mutex thousands of times, isn't that slow?" has a satisfying answer: no — an uncontended lock is a handful of CPU cycles.</p>
+      </div>
+
+      <div class="section" id="ch3-s2">
+        <h3>3.3 &nbsp;The slow path: FUTEX_WAIT / FUTEX_WAKE</h3>
+        <p>When the CAS fails, glibc calls the <code>futex()</code> syscall:</p>
+        <pre><code>futex(&amp;futex_word, FUTEX_WAIT, expected_val, timeout);</code></pre>
+        <p>Semantics: <em>atomically</em> re-check that <code>futex_word</code> still equals <code>expected_val</code>; if so, sleep on this address. The atomicity of that recheck is essential — it closes the window where the holder might unlock between your failed CAS and your decision to sleep (otherwise you'd sleep forever waiting for a wake that already fired).</p>
+        <p>On unlock, the holder resets the word and, if it detected waiters, issues:</p>
+        <pre><code>futex(&amp;futex_word, FUTEX_WAKE, 1);   // wake one waiter</code></pre>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 460 200" xmlns="http://www.w3.org/2000/svg">
+            <rect x="10" y="20" width="140" height="50" rx="6" fill="none" stroke="var(--accent-compile)" stroke-width="1.5"/>
+            <text x="80" y="42" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">Coder 1</text>
+            <text x="80" y="58" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">CAS wins → holds dongle</text>
+            <rect x="170" y="120" width="150" height="50" rx="6" fill="none" stroke="var(--accent-debug)" stroke-width="1.5"/>
+            <text x="245" y="142" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">Coder 2</text>
+            <text x="245" y="158" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">CAS fails → FUTEX_WAIT → sleeps</text>
+            <rect x="310" y="20" width="140" height="50" rx="6" fill="none" stroke="var(--accent-take)" stroke-width="1.5"/>
+            <text x="380" y="42" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">Kernel futex hash table</text>
+            <text x="380" y="58" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">addr → [coder 2, coder 5]</text>
+            <line x1="150" y1="45" x2="310" y2="45" stroke="var(--text-faint)"/>
+            <text x="230" y="36" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">unlock → FUTEX_WAKE</text>
+            <line x1="270" y1="120" x2="370" y2="70" stroke="var(--text-faint)"/>
+          </svg>
+          <div class="diagram-caption">The kernel only tracks this mutex because someone actually had to wait on it. No contention = no kernel involvement at all.</div>
+        </div>
+        <div id="ch3-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 3 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why must FUTEX_WAIT re-check the expected value atomically inside the kernel, rather than trusting the userspace CAS failure that preceded it?</li>
+          <li>Roughly how many syscalls does an uncontended lock+unlock cost? A contended one?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Prove pthread_mutex_lock() doesn't always make a syscall." Walk the CAS fast path from memory.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 4 ============ -->
+    <section class="chapter" id="ch4">
+      <div class="chapter-label">Chapter 04</div>
+      <h2>Lock acquisition</h2>
+
+      <div class="section" id="ch4-s0">
+        <h3>4.1 &nbsp;The full acquisition path</h3>
+        <p>Putting Chapters 2–3 together, a complete <code>pthread_mutex_lock()</code>:</p>
+        <ol>
+          <li><strong>Try the CAS.</strong> Free → acquired, return. Done, no kernel.</li>
+          <li><strong>Adaptive spin</strong> (for <code>PTHREAD_MUTEX_ADAPTIVE_NP</code>): retry briefly, betting the holder will release within a few hundred cycles — cheaper than sleeping if the bet pays off.</li>
+          <li><strong>Mark contention.</strong> Set the futex word to a value meaning "locked, and waiters exist" so the unlocker knows it must issue a FUTEX_WAKE.</li>
+          <li><strong>FUTEX_WAIT.</strong> Sleep. The task enters <code>TASK_INTERRUPTIBLE</code>, leaves the runqueue, consumes zero CPU.</li>
+          <li><strong>Woken.</strong> Loop back to step 1 — because waking does <em>not</em> mean you own the lock (Chapter 5).</li>
+        </ol>
+        <div class="why-box"><span class="tag">Step 5 is the subtle one</span>
+        Being woken from FUTEX_WAIT means "the lock <em>might</em> be available now," not "the lock is yours." Another thread could grab it between your wake and your retry. This is why the implementation loops rather than assuming success — the same structural reason you must loop around <code>pthread_cond_wait()</code> (Course 6).</div>
+      </div>
+
+      <div class="section" id="ch4-s1">
+        <h3>4.2 &nbsp;trylock and timedlock</h3>
+        <table>
+          <tr><th>Function</th><th>Behavior on a held mutex</th></tr>
+          <tr><td><code>pthread_mutex_lock</code></td><td>Blocks indefinitely until acquired</td></tr>
+          <tr><td><code>pthread_mutex_trylock</code></td><td>Returns <code>EBUSY</code> immediately — never blocks</td></tr>
+          <tr><td><code>pthread_mutex_timedlock</code></td><td>Blocks until acquired or the absolute deadline passes, then returns <code>ETIMEDOUT</code></td></tr>
+        </table>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — a tempting wrong turn</span>
+        <code>trylock</code> looks like an attractive deadlock avoidance trick: "try both dongles, if the second fails, release the first and retry." It does prevent circular wait — but naively it invites <strong>livelock</strong>, where all coders repeatedly grab-fail-release in lockstep, making no progress while burning CPU. Note also that <code>pthread_mutex_trylock</code> is <em>not</em> in Codexion's allowed external-function list — the subject steers you toward condition variables for arbitration instead, which is a hint about the intended design, not an arbitrary restriction.</div>
+      </div>
+
+      <div class="section" id="ch4-s2">
+        <h3>4.3 &nbsp;Who wins when several are waiting?</h3>
+        <p>Critical fact: <strong>a plain <code>pthread_mutex_t</code> makes no fairness guarantee whatsoever.</strong> POSIX does not promise FIFO ordering among waiters. Whichever thread the kernel happens to wake, or whichever new arrival happens to win the CAS first (a "barging" thread that never waited at all), gets the lock. A thread can, in principle, be starved indefinitely.</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — this is why you build a scheduler</span>
+        This is the single most important idea in this course for your project. Codexion demands "fair arbitration is mandatory: when multiple coders request the same dongle, the dongle must grant access according to <code>scheduler</code> (fifo or edf)." A raw mutex cannot deliver that — it has no notion of arrival order or deadlines. That's precisely why the subject makes you build an explicit request queue (your heap) on top: the mutex protects the <em>queue's</em> integrity, while your own FIFO/EDF logic decides <em>who gets served next</em>. Mutex = data protection. Your heap = arbitration policy. Two different jobs.</div>
+        <div id="ch4-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 4 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why does the lock implementation loop back and retry the CAS after being woken, instead of assuming it now owns the lock?</li>
+          <li>Explain the division of labor between "the mutex protecting your request queue" and "your heap deciding who gets the dongle." Why can't the mutex do both jobs?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Does pthread_mutex_lock() serve waiting threads in FIFO order?" Answer: no, POSIX guarantees no such thing — and explain what that implies for Codexion's fairness requirement.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 5 ============ -->
+    <section class="chapter" id="ch5">
+      <div class="chapter-label">Chapter 05</div>
+      <h2>Wait queues</h2>
+
+      <div class="section" id="ch5-s0">
+        <h3>5.1 &nbsp;The kernel's futex hash table</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        When coder 2 calls FUTEX_WAIT on dongle 3's lock word, the kernel must remember: "this task is sleeping, waiting for <em>that specific address</em>." When someone later calls FUTEX_WAKE on that address, the kernel must find exactly those sleepers. That mapping — address → list of waiting tasks — is the <strong>wait queue</strong>, implemented as a hash table keyed by the futex address.</div>
+        <p>Note the elegance: the kernel stores nothing about a futex until someone waits on it. A mutex that's never contended has no kernel-side existence at all — no allocation, no bookkeeping, nothing. The wait queue entry appears on first contention and disappears when the last waiter leaves.</p>
+      </div>
+
+      <div class="section" id="ch5-s1">
+        <h3>5.2 &nbsp;WAKE one vs. WAKE all</h3>
+        <table>
+          <tr><th>Operation</th><th>Effect</th><th>Used by</th></tr>
+          <tr><td><code>FUTEX_WAKE, 1</code></td><td>Wake one waiter</td><td><code>pthread_mutex_unlock</code>, <code>pthread_cond_signal</code></td></tr>
+          <tr><td><code>FUTEX_WAKE, INT_MAX</code></td><td>Wake every waiter</td><td><code>pthread_cond_broadcast</code></td></tr>
+        </table>
+        <div class="why-box"><span class="tag">The thundering herd</span>
+        Waking all waiters when only one can proceed causes a <strong>thundering herd</strong>: N threads wake, all contend, N−1 immediately go back to sleep, having accomplished nothing but N context switches and a burst of cache-line bouncing. This is why <code>signal</code> is preferred over <code>broadcast</code> when only one waiter can possibly make progress — a distinction that matters directly in Course 6.</div>
+      </div>
+
+      <div class="section" id="ch5-s2">
+        <h3>5.3 &nbsp;Wait queues you build yourself</h3>
+        <p>The kernel's futex wait queue serves the mutex. It has nothing to do with <em>your</em> queue of coders waiting for a dongle — those are different layers solving different problems:</p>
+        <table>
+          <tr><th></th><th>Kernel futex wait queue</th><th>Your Codexion request heap</th></tr>
+          <tr><td>Tracks</td><td>Threads sleeping on a lock word</td><td>Coders waiting for a dongle, ordered by policy</td></tr>
+          <tr><td>Ordering</td><td>Unspecified / not fair by design</td><td>Strictly fifo or edf, as the subject demands</td></tr>
+          <tr><td>Who manages it</td><td>The kernel, invisibly</td><td>You, explicitly, in C</td></tr>
+        </table>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This table <em>is</em> your answer to "why do I need a heap when mutexes already have wait queues?" — because the kernel's wait queue is unordered by design, invisible to you, and cannot express "the coder with the earliest burnout deadline goes next." Your heap is the arbitration layer; the futex wait queue is just the sleeping mechanism underneath it.</div>
+        <div id="ch5-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 5 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>What does the kernel store about a mutex that has never been contended? Why is that a good design?</li>
+          <li>Describe a thundering herd concretely, using 200 Codexion coders waiting on one dongle.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 6 ============ -->
+    <section class="chapter" id="ch6">
+      <div class="chapter-label">Chapter 06</div>
+      <h2>Priority inheritance</h2>
+
+      <div class="section" id="ch6-s0">
+        <h3>6.1 &nbsp;Priority inversion, the failure mode</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Consider three threads: L (low priority), M (medium), H (high). L acquires a mutex. H tries to acquire the same mutex and blocks — expected, it must wait for L. Then M (which never touches the mutex at all) becomes runnable and, being higher priority than L, preempts it. Now L can't run, so L can't release the mutex, so H — the highest-priority thread in the system — is blocked indefinitely by M, a thread of <em>lower</em> priority than H. The priority ordering has been inverted.</div>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 460 180" xmlns="http://www.w3.org/2000/svg">
+            <text x="20" y="30" font-family="IBM Plex Mono" font-size="10" fill="var(--accent-burnout)">H (high)</text>
+            <rect x="110" y="18" width="320" height="16" fill="rgba(255,84,112,0.15)" stroke="var(--accent-burnout)" stroke-dasharray="3 2"/>
+            <text x="270" y="30" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--accent-burnout)">blocked on mutex — cannot run</text>
+            <text x="20" y="75" font-family="IBM Plex Mono" font-size="10" fill="var(--accent-debug)">M (medium)</text>
+            <rect x="180" y="63" width="180" height="16" fill="rgba(255,180,84,0.2)" stroke="var(--accent-debug)"/>
+            <text x="270" y="75" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text)">running (unrelated work)</text>
+            <text x="20" y="120" font-family="IBM Plex Mono" font-size="10" fill="var(--accent-take)">L (low)</text>
+            <rect x="110" y="108" width="70" height="16" fill="rgba(94,230,255,0.2)" stroke="var(--accent-take)"/>
+            <text x="145" y="120" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text)">holds mutex</text>
+            <rect x="180" y="108" width="180" height="16" fill="none" stroke="var(--text-faint)" stroke-dasharray="2 2"/>
+            <text x="270" y="120" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text-faint)">preempted by M — can't release!</text>
+            <text x="230" y="160" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text-dim)">M indirectly blocks H, despite H outranking M. Priority inverted.</text>
+          </svg>
+          <div class="diagram-caption">The Mars Pathfinder mission famously suffered exactly this bug in 1997 — it is not a theoretical concern.</div>
+        </div>
+      </div>
+
+      <div class="section" id="ch6-s1">
+        <h3>6.2 &nbsp;Priority inheritance as the fix</h3>
+        <p><strong>Priority inheritance</strong>: while a low-priority thread holds a mutex that a high-priority thread is waiting for, the holder temporarily inherits the waiter's priority. L runs at H's priority, so M can no longer preempt it; L finishes its critical section quickly, releases the mutex, drops back to its own priority, and H proceeds. The inversion window shrinks to just the length of L's critical section — bounded and acceptable.</p>
+        <pre><code>pthread_mutexattr_t attr;
+pthread_mutexattr_init(&amp;attr);
+pthread_mutexattr_setprotocol(&amp;attr, PTHREAD_PRIO_INHERIT);
+pthread_mutex_init(&amp;mtx, &amp;attr);</code></pre>
+        <p>This is one of the things those 40 bytes of <code>pthread_mutex_t</code> (Chapter 2) pay for: the bookkeeping to track the owner and manage inherited priorities.</p>
+      </div>
+
+      <div class="section" id="ch6-s2">
+        <h3>6.3 &nbsp;Does Codexion need it?</h3>
+        <div class="why-box"><span class="tag">Honest scope note</span>
+        <strong>No.</strong> Priority inheritance addresses inversion between threads at <em>different OS scheduling priorities</em>. Codexion's coder threads all run at the same default priority under CFS — you never call <code>pthread_setschedparam</code> or use <code>SCHED_FIFO</code>. With no priority differences, there is no priority inversion to invert. And note: <code>pthread_mutexattr_setprotocol</code> isn't in the subject's allowed function list anyway.</div>
+        <div class="codexion-box"><span class="tag">Why learn it then?</span>
+        Two reasons, both practical. First, an evaluator can absolutely ask "what is priority inversion and does your project suffer from it?" — and the strong answer is a precise <em>no, because all my threads share one priority level under CFS</em>, not a blank stare. Second, Codexion's <code>edf</code> mode gives coders different <em>urgencies</em> (deadlines), which is priority-like in spirit — so it's worth being able to articulate clearly why your EDF arbitration is a userspace policy over a dongle, not OS thread priorities, and therefore why priority inheritance is genuinely irrelevant here rather than merely omitted.</div>
+        <div id="ch6-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 6 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Walk through the three-thread priority inversion scenario in your own words. Which thread is the villain, and why is that counterintuitive?</li>
+          <li>Why is priority inversion not a concern for Codexion specifically? Give the precise reason.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Your edf scheduler gives some coders more urgency than others. Isn't that priority — shouldn't you worry about priority inversion?" Distinguish userspace arbitration policy from OS thread scheduling priority.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 7 ============ -->
+    <section class="chapter" id="ch7">
+      <div class="chapter-label">Chapter 07</div>
+      <h2>Recursive mutexes</h2>
+
+      <div class="section" id="ch7-s0">
+        <h3>7.1 &nbsp;The mutex kinds</h3>
+        <table>
+          <tr><th>Kind</th><th>Relocking from the same thread</th><th>Unlocking one you don't own</th></tr>
+          <tr><td><code>PTHREAD_MUTEX_NORMAL</code></td><td><strong>Deadlock</strong> — you block forever waiting for yourself</td><td>Undefined behavior</td></tr>
+          <tr><td><code>PTHREAD_MUTEX_ERRORCHECK</code></td><td>Returns <code>EDEADLK</code></td><td>Returns <code>EPERM</code></td></tr>
+          <tr><td><code>PTHREAD_MUTEX_RECURSIVE</code></td><td>Succeeds; increments a counter</td><td>Returns <code>EPERM</code></td></tr>
+        </table>
+        <div class="why-box"><span class="tag">Why NORMAL deadlocks rather than erroring</span>
+        Checking "am I already the owner?" costs a comparison on every single lock — a real cost on the fast path that the vast majority of correct code never benefits from. POSIX's default trades that safety check for speed and declares self-relock undefined. ERRORCHECK exists precisely for when you want the check during development.</div>
+      </div>
+
+      <div class="section" id="ch7-s1">
+        <h3>7.2 &nbsp;How recursion is tracked</h3>
+        <p>A recursive mutex stores the owner's thread ID and a counter. Locking: if the owner is you, increment and return immediately. Unlocking: decrement; only when the count reaches zero is the mutex actually released and a waiter woken. This means <strong>every lock must be matched by an unlock</strong> — three locks require three unlocks, or the mutex stays held forever.</p>
+        <pre><code>pthread_mutexattr_t attr;
+pthread_mutexattr_init(&amp;attr);
+pthread_mutexattr_settype(&amp;attr, PTHREAD_MUTEX_RECURSIVE);
+pthread_mutex_init(&amp;mtx, &amp;attr);</code></pre>
+      </div>
+
+      <div class="section" id="ch7-s2">
+        <h3>7.3 &nbsp;Why recursive mutexes are usually a design smell</h3>
+        <div class="why-box"><span class="tag">The argument against</span>
+        You reach for a recursive mutex when a locked function calls another function that also locks the same mutex — which means you've lost track of which functions assume the lock is held. The recursive mutex lets you stop thinking about it, but the confusion doesn't go away: it just stops producing an immediate deadlock. Worse, it silently breaks the mental model of a critical section — with recursion, "I hold the lock" no longer means "the invariant is intact," because an inner function may have left the shared state half-updated before returning to an outer frame that assumes it's consistent.
+        <br><br>The usual better fix: split each function into a public version that locks and calls an internal <code>_locked</code> variant that assumes the caller already holds it. Now lock ownership is explicit in your function names, and the compiler-visible structure matches the actual invariant.</div>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        Codexion needs no recursive mutexes — and note <code>pthread_mutexattr_settype</code> isn't in the allowed function list, so the question is settled by the subject anyway. Your dongle mutexes each guard exactly one dongle's state; your log mutex guards output. If you find yourself wanting to relock a mutex you already hold, that's a strong signal your locking structure needs simplifying, not that you need a recursive mutex. Being able to say that clearly at defense is worth more than the feature would be.</div>
+        <div id="ch7-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 7 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Predict the output</div><ol>
+          <li>A thread locks a <code>PTHREAD_MUTEX_NORMAL</code> mutex, then calls a helper that locks the same mutex again. What happens, exactly? What if it were ERRORCHECK instead?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Explain why a recursive mutex weakens the "holding the lock means the invariant holds" guarantee. Why is the <code>_locked</code>-suffix pattern a better fix?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 8 ============ -->
+    <section class="chapter" id="ch8">
+      <div class="chapter-label">Chapter 08</div>
+      <h2>Common mistakes</h2>
+
+      <div class="section" id="ch8-s0">
+        <h3>8.1 &nbsp;The classic eight</h3>
+        <table>
+          <tr><th>Mistake</th><th>Symptom</th><th>How it's caught</th></tr>
+          <tr><td>Forgetting to unlock on an early <code>return</code></td><td>Deadlock — everyone else blocks forever</td><td>Program hangs; Helgrind may flag lock-order issues</td></tr>
+          <tr><td>Reading shared state outside the mutex</td><td>Data race; may look fine for thousands of runs</td><td>Helgrind: "Locks held: none"</td></tr>
+          <tr><td>Locking two mutexes in inconsistent order across threads</td><td>Circular-wait deadlock (Course 7)</td><td>Helgrind lock-order detection</td></tr>
+          <tr><td>Destroying a mutex while a thread still holds/waits on it</td><td>Undefined behavior; possible crash</td><td>Helgrind; valgrind</td></tr>
+          <tr><td>Copying a <code>pthread_mutex_t</code> by value</td><td>Undefined — the copy isn't a valid mutex</td><td>Often silent; review-only</td></tr>
+          <tr><td>Locking a mutex that was never <code>pthread_mutex_init</code>'d</td><td>Undefined behavior</td><td>Helgrind flags uninitialized mutex use</td></tr>
+          <tr><td>Relocking a NORMAL mutex you already hold</td><td>Self-deadlock (Chapter 7)</td><td>Hang; ERRORCHECK would return EDEADLK</td></tr>
+          <tr><td>Holding a mutex across a long <code>usleep()</code></td><td>Not a bug, but destroys concurrency</td><td>Only visible in timing/log analysis</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch8-s1">
+        <h3>8.2 &nbsp;The Codexion-specific traps</h3>
+        <div class="codexion-box"><span class="tag">Trap 1 — sleeping while holding a dongle mutex</span>
+        A coder holds two dongle mutexes to compile, and the compile is simulated with <code>usleep(time_to_compile * 1000)</code>. That's <em>correct</em> — the subject explicitly says a coder "must hold two dongles" during that time. But holding a mutex during a long sleep is exactly the pattern that's wrong in most other codebases, so be ready to explain <em>why it's right here</em>: the mutex isn't just protecting a data structure, it's modeling physical possession of the dongle for the duration.</div>
+        <div class="codexion-box"><span class="tag">Trap 2 — the partially-protected read</span>
+        Checking <code>if (dongle-&gt;available)</code> outside the mutex "just to avoid locking when it's obviously busy" is the single most common Codexion race. Helgrind reports it as a conflicting access with <strong>Locks held: none</strong> (Course 9). There is no such thing as a safe unprotected read of shared mutable state.</div>
+        <div class="codexion-box"><span class="tag">Trap 3 — unprotected logging</span>
+        The subject requires "a displayed state message should not be mixed up with another message" and mandates a mutex around output. Forgetting it produces interleaved log lines under contention — an automatic 0 per the evaluation scale, and one that only appears under load, not in your gentle 5-coder tests.</div>
+      </div>
+
+      <div class="section" id="ch8-s2">
+        <h3>8.3 &nbsp;A defensive checklist</h3>
+        <ul>
+          <li>Every <code>lock</code> has exactly one matching <code>unlock</code> on <em>every</em> path out of the function, including error returns.</li>
+          <li>Every access to shared mutable state — read <em>or</em> write — is inside the appropriate mutex.</li>
+          <li>If a thread ever holds two mutexes, all threads acquire them in the same documented global order (Course 7).</li>
+          <li>Every <code>pthread_mutex_init</code> has a matching <code>pthread_mutex_destroy</code> at shutdown, after all threads are joined.</li>
+          <li>Critical sections are as short as the semantics allow — with the deliberate, explainable exception of holding dongles across the compile duration.</li>
+          <li>Run <code>valgrind --tool=helgrind</code>, <code>--tool=drd</code>, and a <code>-fsanitize=thread</code> build. All three clean.</li>
+        </ul>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        That last line isn't optional advice — it's transcribed from the evaluation scale, which instructs evaluators to run exactly those three tools and states that any reported data race or lock-ordering deadlock means 0. Course 9 covers reading their output.</div>
+        <div id="ch8-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 8 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Debugging exercise</div><ol>
+          <li>A coder function locks a dongle mutex, then hits an early <code>return -1;</code> on an error path before unlocking. Describe the exact sequence of events that follows for the other four coders.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"You hold a mutex across a 200ms usleep. Isn't that terrible practice?" Defend it — explain why the mutex models physical dongle possession here, and what would break if you released it during the compile.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    </div><!-- /chapters-root -->
+
+  </main>
+</div>
+
+<script>
+/* ================= THEME ================= */
+function toggleTheme(){
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  document.getElementById('theme-toggle').textContent = isLight ? '☀ light mode' : '🌙 dark mode';
+}
+
+/* ================= PROGRESS BAR ================= */
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+});
+
+/* ================= HERO DIAGRAM (SVG, generated) ================= */
+(function(){
+  const N = 5, R = 110, cx=180, cy=150;
+  let coders = [], dongles = [];
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + i*(2*Math.PI/N);
+    coders.push({x: cx+R*Math.cos(a), y: cy+R*Math.sin(a), n:i+1});
+  }
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + (i+0.5)*(2*Math.PI/N);
+    dongles.push({x: cx+ (R-38)*Math.cos(a), y: cy+(R-38)*Math.sin(a)});
+  }
+  let svg = `<svg viewBox="0 0 360 320" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<circle cx="${cx}" cy="${cy}" r="34" fill="none" stroke="var(--accent-compile)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  svg += `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">QUANTUM</text>`;
+  svg += `<text x="${cx}" y="${cy+9}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">COMPILER</text>`;
+  dongles.forEach((d,i) => {
+    svg += `<rect x="${d.x-9}" y="${d.y-6}" width="18" height="12" rx="2" fill="var(--accent-take)" opacity="0.85"/>`;
+  });
+  coders.forEach(c => {
+    svg += `<circle cx="${c.x}" cy="${c.y}" r="20" fill="var(--bg-elev)" stroke="var(--accent-refactor)" stroke-width="2"/>`;
+    svg += `<text x="${c.x}" y="${c.y+4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" fill="var(--text)">${c.n}</text>`;
+  });
+  svg += `</svg>`;
+  document.getElementById('hero-diagram').innerHTML = svg;
+})();
+
+/* ================= QUIZ ENGINE ================= */
+function renderQuiz(container, q){
+  const div = document.createElement('div');
+  div.className = 'quiz';
+  div.innerHTML = `<div class="q-title">Check yourself</div><div class="q-text">${q.q}</div><div class="opts"></div><div class="feedback"></div>`;
+  const opts = div.querySelector('.opts');
+  q.options.forEach((opt, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.textContent = opt;
+    btn.onclick = () => {
+      const fb = div.querySelector('.feedback');
+      [...opts.children].forEach(b => b.disabled = true);
+      if(idx === q.correct){
+        btn.classList.add('correct');
+      } else {
+        btn.classList.add('wrong');
+        opts.children[q.correct].classList.add('correct');
+      }
+      fb.textContent = q.explain;
+      fb.classList.add('show');
+    };
+    opts.appendChild(btn);
+  });
+  container.appendChild(div);
+}
+</script>
+
+<script>
+/* ================= SIDEBAR NAV ================= */
+const chapterMeta = [
+  {n:1, title:"Why mutexes exist", sections:["The problem, stated precisely","Why a flag doesn't work","Two guarantees, not one"]},
+  {n:2, title:"Internal implementation", sections:["Compare-and-swap","Spinning vs. blocking","Why pthread_mutex_t is 40 bytes"]},
+  {n:3, title:"Futexes", sections:["Fast Userspace muTEX","The fast path","FUTEX_WAIT / FUTEX_WAKE"]},
+  {n:4, title:"Lock acquisition", sections:["The full acquisition path","trylock and timedlock","Who wins when several wait?"]},
+  {n:5, title:"Wait queues", sections:["The kernel futex hash table","WAKE one vs. WAKE all","Wait queues you build yourself"]},
+  {n:6, title:"Priority inheritance", sections:["Priority inversion","Priority inheritance as the fix","Does Codexion need it?"]},
+  {n:7, title:"Recursive mutexes", sections:["The mutex kinds","How recursion is tracked","Why they're a design smell"]},
+  {n:8, title:"Common mistakes", sections:["The classic eight","Codexion-specific traps","A defensive checklist"]},
+];
+const navList = document.getElementById('nav-list');
+chapterMeta.forEach(ch => {
+  const wrap = document.createElement('div');
+  wrap.className = 'nav-chapter';
+  const head = document.createElement('div');
+  head.className = 'nav-chapter-head';
+  head.innerHTML = `<span class="num">${String(ch.n).padStart(2,'0')}</span><span>${ch.title}</span><span class="arrow">›</span>`;
+  head.onclick = () => wrap.classList.toggle('open');
+  wrap.appendChild(head);
+  const secs = document.createElement('div');
+  secs.className = 'nav-sections';
+  ch.sections.forEach((s,i) => {
+    const a = document.createElement('a');
+    a.href = `#ch${ch.n}-s${i}`;
+    a.textContent = s;
+    secs.appendChild(a);
+  });
+  wrap.appendChild(secs);
+  navList.appendChild(wrap);
+});
+// open chapter 1 by default
+navList.querySelector('.nav-chapter').classList.add('open');
+
+/* ================= QUIZ DATA ================= */
+renderQuiz(document.getElementById('ch1-quiz1'), {
+  q: "Why can't you implement a working mutex with just `while (locked) {} locked = 1;`?",
+  options: [
+    "Because while loops are too slow to be used for locking.",
+    "Because the check and the set are two separate operations — two threads can both observe locked==0, both exit the loop, and both set it to 1, each believing it holds the lock.",
+    "Because `locked` must be declared volatile to work correctly.",
+    "It actually works fine, it's just less readable than pthread_mutex_lock()."
+  ],
+  correct: 1,
+  explain: "Correct. This is the lost-update race applied to the lock itself. Fixing it requires a hardware instruction that reads and writes atomically with no window in between — compare-and-swap."
+});
+renderQuiz(document.getElementById('ch2-quiz1'), {
+  q: "Why is sizeof(pthread_mutex_t) 40 bytes on glibc/x86-64 rather than just 1 byte for a locked/unlocked flag?",
+  options: [
+    "Padding — 39 of those bytes are unused alignment filler.",
+    "It carries the futex word plus the owner's thread ID, a recursion counter, the mutex kind, and priority-inheritance bookkeeping — features you inherit for free rather than hand-rolling.",
+    "Because every mutex embeds a full copy of the kernel's wait queue.",
+    "Because C requires all structs to be at least 40 bytes."
+  ],
+  correct: 1,
+  explain: "Right. The extra bytes pay for error-checking, recursive mutex support, and priority inheritance — the machinery Chapters 6 and 7 cover."
+});
+renderQuiz(document.getElementById('ch3-quiz1'), {
+  q: "Why must FUTEX_WAIT re-check the expected value atomically inside the kernel, rather than trusting the userspace CAS that just failed?",
+  options: [
+    "It doesn't — the kernel trusts userspace and sleeps immediately.",
+    "Because the holder could unlock in the window between your failed CAS and your syscall — without the atomic recheck you'd sleep waiting for a wake that already fired, and never be woken.",
+    "Because the kernel needs to validate the pointer is not NULL.",
+    "To measure how long the thread has been waiting for scheduling statistics."
+  ],
+  correct: 1,
+  explain: "Correct. That atomic recheck-and-sleep is the entire reason futexes are safe — it closes the lost-wakeup window, exactly like pthread_cond_wait's atomic unlock+sleep does in Course 6."
+});
+renderQuiz(document.getElementById('ch4-quiz1'), {
+  q: "Codexion requires 'fair arbitration' — fifo or edf ordering when multiple coders want the same dongle. Why can't a plain pthread_mutex_t deliver that on its own?",
+  options: [
+    "It can — pthread_mutex_t wakes waiters in strict FIFO arrival order by default.",
+    "POSIX makes no fairness guarantee for mutex waiters: the kernel may wake any waiter, and a brand-new arrival can barge in and win the CAS without ever waiting — so you must build an explicit request queue (your heap) to implement the ordering policy yourself.",
+    "Because mutexes only work correctly with fewer than 8 threads.",
+    "Because pthread_mutex_t is always LIFO, which is the reverse of what's needed."
+  ],
+  correct: 1,
+  explain: "Exactly. The mutex protects your queue's integrity; your heap decides who gets served. Two different jobs — this is the core reason the subject mandates implementing a heap."
+});
+renderQuiz(document.getElementById('ch5-quiz1'), {
+  q: "What does the Linux kernel store about a pthread_mutex_t that has never been contended?",
+  options: [
+    "A full wait queue entry allocated at pthread_mutex_init() time.",
+    "Nothing at all — the kernel only learns the futex exists when a thread actually has to FUTEX_WAIT on it; an uncontended mutex has zero kernel-side footprint.",
+    "A reference count incremented on every lock and unlock.",
+    "A copy of the mutex struct in kernel memory, kept in sync on each operation."
+  ],
+  correct: 1,
+  explain: "Right — that's precisely the 'fast userspace' half of the futex design. No contention means no syscall, no allocation, no kernel bookkeeping whatsoever."
+});
+renderQuiz(document.getElementById('ch6-quiz1'), {
+  q: "Does Codexion need priority inheritance on its dongle mutexes?",
+  options: [
+    "Yes — any project with deadlines needs PTHREAD_PRIO_INHERIT to avoid inversion.",
+    "No — priority inversion requires threads at different OS scheduling priorities, and all Codexion coder threads run at the same default priority under CFS; the edf deadlines are a userspace arbitration policy, not OS thread priorities.",
+    "Yes, but only for the monitor thread's mutex.",
+    "No, because priority inheritance only applies to processes, not threads."
+  ],
+  correct: 1,
+  explain: "Correct. The precise reason matters: no priority differences means no inversion to fix. Distinguishing your userspace EDF policy from OS thread priority is exactly the nuance an evaluator is probing for."
+});
+renderQuiz(document.getElementById('ch7-quiz1'), {
+  q: "A thread locks a PTHREAD_MUTEX_NORMAL mutex, then calls a helper that locks the same mutex again. What happens?",
+  options: [
+    "The second lock succeeds and increments an internal counter.",
+    "Self-deadlock — the thread blocks forever waiting for a mutex it holds itself; POSIX declares this undefined for NORMAL mutexes. An ERRORCHECK mutex would instead return EDEADLK.",
+    "The second lock returns EBUSY immediately.",
+    "The mutex is automatically upgraded to recursive at runtime."
+  ],
+  correct: 1,
+  explain: "Right. NORMAL skips the ownership check to keep the fast path fast, at the cost of undefined behavior on self-relock. ERRORCHECK exists precisely to catch this during development."
+});
+renderQuiz(document.getElementById('ch8-quiz1'), {
+  q: "Your Codexion coder holds two dongle mutexes across a 200ms usleep() simulating the compile. Is holding a mutex during a long sleep a bug here?",
+  options: [
+    "Yes — holding a mutex across any sleep is always a bug and should be refactored.",
+    "No — the subject explicitly requires a coder to hold two dongles for the whole time_to_compile duration; here the mutex models physical possession of the dongle, not just brief data protection. Releasing it mid-compile would let another coder take a dongle that's still plugged in.",
+    "Yes, unless you use a recursive mutex instead.",
+    "No, but only because usleep() releases mutexes automatically."
+  ],
+  correct: 1,
+  explain: "Correct — and being able to articulate WHY this deviates from the usual 'keep critical sections short' advice is exactly the kind of design justification a 1337 evaluator is looking for."
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codexion Course 6: Condition Variables</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f14; --bg-elev:#12151c; --bg-card:#171b24; --border:#252b38;
+  --text:#e7e9ee; --text-dim:#9aa3b5; --text-faint:#5c6478;
+  --accent-take:#5ee6ff;   /* has taken a dongle */
+  --accent-compile:#4f8cff; /* compiling */
+  --accent-debug:#ffb454;   /* debugging */
+  --accent-refactor:#b98eff;/* refactoring */
+  --accent-burnout:#ff5470; /* burned out */
+  --mono:'IBM Plex Mono', monospace;
+  --sans:'Inter', sans-serif;
+  --radius:10px;
+}
+html[data-theme="light"]{
+  --bg:#f5f6f8; --bg-elev:#ffffff; --bg-card:#ffffff; --border:#dde1e8;
+  --text:#191c22; --text-dim:#565f70; --text-faint:#8890a0;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  line-height:1.65; font-size:16px; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent-compile);}
+code, .mono{font-family:var(--mono);}
+
+/* ---------- Progress bar ---------- */
+#progress-bar{position:fixed; top:0; left:0; height:3px; background:linear-gradient(90deg,var(--accent-take),var(--accent-compile),var(--accent-debug),var(--accent-refactor)); width:0%; z-index:1000; transition:width .1s linear;}
+
+/* ---------- Layout ---------- */
+#app{display:flex; min-height:100vh;}
+#sidebar{
+  width:300px; flex-shrink:0; background:var(--bg-elev); border-right:1px solid var(--border);
+  position:sticky; top:0; height:100vh; overflow-y:auto; padding:20px 0 60px;
+}
+#sidebar .brand{padding:0 20px 16px; border-bottom:1px solid var(--border); margin-bottom:12px;}
+#sidebar .brand-title{font-family:var(--mono); font-weight:700; font-size:1.05rem; letter-spacing:.02em;}
+#sidebar .brand-sub{color:var(--text-faint); font-size:.78rem; margin-top:4px;}
+#theme-toggle{
+  margin-top:12px; background:var(--bg-card); border:1px solid var(--border); color:var(--text);
+  padding:6px 12px; border-radius:20px; font-size:.75rem; cursor:pointer; font-family:var(--mono);
+}
+.nav-chapter{border-bottom:1px solid var(--border);}
+.nav-chapter-head{
+  display:flex; align-items:center; gap:10px; padding:10px 20px; cursor:pointer; user-select:none;
+  font-size:.86rem; color:var(--text-dim); transition:color .15s;
+}
+.nav-chapter-head:hover{color:var(--text);}
+.nav-chapter-head .num{font-family:var(--mono); color:var(--text-faint); font-size:.75rem; width:20px; flex-shrink:0;}
+.nav-chapter-head .arrow{margin-left:auto; transition:transform .2s; font-size:.7rem; color:var(--text-faint);}
+.nav-chapter.open .arrow{transform:rotate(90deg);}
+.nav-sections{max-height:0; overflow:hidden; transition:max-height .25s ease;}
+.nav-chapter.open .nav-sections{max-height:500px;}
+.nav-sections a{
+  display:block; padding:6px 20px 6px 50px; font-size:.8rem; color:var(--text-faint);
+  text-decoration:none; border-left:2px solid transparent;
+}
+.nav-sections a:hover, .nav-sections a.active{color:var(--accent-compile); border-left-color:var(--accent-compile);}
+
+#main{flex:1; min-width:0; max-width:900px; margin:0 auto; padding:60px 48px 160px;}
+
+/* ---------- Hero ---------- */
+.hero{padding:20px 0 50px; border-bottom:1px solid var(--border); margin-bottom:50px;}
+.hero-eyebrow{font-family:var(--mono); font-size:.78rem; color:var(--accent-take); letter-spacing:.08em; text-transform:uppercase; margin-bottom:14px;}
+.hero h1{font-family:var(--mono); font-size:2.4rem; font-weight:700; line-height:1.15; margin-bottom:16px;}
+.hero p.lead{color:var(--text-dim); font-size:1.08rem; max-width:640px; margin-bottom:32px;}
+.legend{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:36px;}
+.legend .chip{
+  display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:.76rem;
+  padding:6px 12px; border-radius:20px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-dim);
+}
+.legend .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+
+/* ---------- Chapter content ---------- */
+.chapter{margin-bottom:90px; scroll-margin-top:20px;}
+.chapter-label{font-family:var(--mono); color:var(--text-faint); font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px;}
+.chapter h2{font-family:var(--mono); font-size:1.9rem; margin-bottom:26px; padding-bottom:16px; border-bottom:1px solid var(--border);}
+.section{scroll-margin-top:20px; margin-bottom:44px;}
+.section h3{font-size:1.25rem; margin-bottom:14px; font-weight:700;}
+.section h4{font-size:1.02rem; margin:20px 0 10px; font-weight:700; color:var(--text-dim);}
+.section p{margin-bottom:14px; max-width:70ch;}
+.section ul, .section ol{margin:0 0 14px 22px;}
+.section li{margin-bottom:6px;}
+
+.why-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-take);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.why-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-take); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.codexion-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-refactor);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.codexion-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-refactor); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.analogy-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-debug);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.analogy-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+pre{
+  background:#08090c; border:1px solid var(--border); border-radius:8px; padding:16px 18px;
+  overflow-x:auto; margin:16px 0; font-size:.86rem; line-height:1.55;
+}
+html[data-theme="light"] pre{background:#f0f1f4;}
+pre code{font-family:var(--mono); color:#c8ccd8;}
+html[data-theme="light"] pre code{color:#2b2f3a;}
+.log-line{display:block;}
+.log-ts{color:var(--text-faint);}
+.log-take{color:var(--accent-take);}
+.log-compile{color:var(--accent-compile);}
+.log-debug{color:var(--accent-debug);}
+.log-refactor{color:var(--accent-refactor);}
+.log-burnout{color:var(--accent-burnout); font-weight:600;}
+
+.expandable{border:1px solid var(--border); border-radius:8px; margin:16px 0; overflow:hidden;}
+.expandable summary{
+  padding:13px 18px; cursor:pointer; font-weight:600; font-size:.92rem; background:var(--bg-card);
+  list-style:none; display:flex; align-items:center; gap:10px;
+}
+.expandable summary::-webkit-details-marker{display:none;}
+.expandable summary::before{content:'+'; font-family:var(--mono); color:var(--accent-compile); font-weight:700;}
+.expandable[open] summary::before{content:'−';}
+.expandable .body{padding:16px 18px; border-top:1px solid var(--border);}
+
+svg{max-width:100%; height:auto;}
+.diagram-wrap{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:24px; margin:20px 0; text-align:center;}
+.diagram-caption{font-size:.82rem; color:var(--text-faint); margin-top:10px; font-family:var(--mono);}
+
+/* ---------- Quiz ---------- */
+.quiz{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:22px 24px; margin:20px 0;}
+.quiz .q-title{font-family:var(--mono); font-size:.75rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px;}
+.quiz .q-text{font-weight:600; margin-bottom:14px;}
+.quiz .opts{display:flex; flex-direction:column; gap:8px;}
+.quiz button.opt{
+  text-align:left; padding:11px 14px; background:var(--bg-elev); border:1px solid var(--border); border-radius:7px;
+  color:var(--text); cursor:pointer; font-family:var(--sans); font-size:.92rem; transition:.15s;
+}
+.quiz button.opt:hover{border-color:var(--accent-compile);}
+.quiz button.opt.correct{border-color:#3ecf8e; background:rgba(62,207,142,.12);}
+.quiz button.opt.wrong{border-color:var(--accent-burnout); background:rgba(255,84,112,.12);}
+.quiz .feedback{margin-top:12px; font-size:.88rem; color:var(--text-dim); display:none;}
+.quiz .feedback.show{display:block;}
+
+/* ---------- Exercises ---------- */
+.exercises{background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:24px 26px; margin-top:30px;}
+.exercises h4{font-family:var(--mono); font-size:.8rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;}
+.ex-group{margin-top:16px;}
+.ex-group .ex-label{font-size:.78rem; color:var(--accent-take); font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;}
+.ex-group ol{margin-left:20px;}
+.ex-group li{margin-bottom:8px; color:var(--text-dim); font-size:.94rem;}
+
+table{width:100%; border-collapse:collapse; margin:16px 0; font-size:.9rem;}
+th,td{border:1px solid var(--border); padding:8px 12px; text-align:left;}
+th{background:var(--bg-card); font-family:var(--mono); font-size:.78rem; text-transform:uppercase;}
+
+.nav-footer{display:flex; justify-content:space-between; margin-top:60px; padding-top:24px; border-top:1px solid var(--border);}
+.nav-footer a{font-family:var(--mono); font-size:.85rem; text-decoration:none; color:var(--text-dim); display:flex; flex-direction:column;}
+.nav-footer a:hover{color:var(--accent-compile);}
+.nav-footer .lbl{font-size:.7rem; color:var(--text-faint); text-transform:uppercase; margin-bottom:4px;}
+
+@media (max-width:860px){
+  #sidebar{position:fixed; left:-300px; z-index:900; transition:left .2s; box-shadow:0 0 40px rgba(0,0,0,.4);}
+  #sidebar.open{left:0;}
+  #main{padding:60px 20px 120px; max-width:100%;}
+  #menu-btn{display:flex !important;}
+}
+#menu-btn{
+  display:none; position:fixed; top:16px; left:16px; z-index:950; width:40px; height:40px;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:8px; color:var(--text);
+  align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem;
+}
+</style>
+</head>
+<body>
+<div id="progress-bar"></div>
+<div id="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</div>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="brand">
+      <div class="brand-title">// codexion — course 6</div>
+      <div class="brand-sub">Condition variables</div>
+      <button id="theme-toggle" onclick="toggleTheme()">☀ light mode</button>
+    </div>
+    <div id="nav-list"></div>
+  </nav>
+
+  <main id="main">
+
+    <section class="hero">
+      <div class="hero-eyebrow">Course 6 of the Codexion series</div>
+      <h1>Condition variables</h1>
+      <p class="lead">A mutex tells you when you may touch shared data. It cannot tell you when that data reaches the state you need. Condition variables fill that gap — and they do it with a contract subtle enough that most bugs in multithreaded code live here: the atomic unlock-and-sleep, the wakeups that arrive with no signal behind them, the signals that vanish because nobody was listening yet. This course takes the contract apart completely, then shows exactly where condition variables fit in Codexion's design — and, just as importantly, what they cannot do for you.</p>
+      <div class="legend">
+        <div class="chip"><span class="dot" style="background:var(--accent-take)"></span> has taken a dongle</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-compile)"></span> compiling</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-debug)"></span> debugging</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-refactor)"></span> refactoring</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-burnout)"></span> burned out</div>
+      </div>
+      <div class="diagram-wrap" id="hero-diagram"></div>
+      <div class="diagram-caption">The Codexion hub: N coders in a circle, N dongles between them, one shared Quantum Compiler in the center.</div>
+    </section>
+
+    <div id="chapters-root">
+
+    <!-- ============ CHAPTER 1 ============ -->
+    <section class="chapter" id="ch1">
+      <div class="chapter-label">Chapter 01</div>
+      <h2>Waiting &amp; sleeping</h2>
+
+      <div class="section" id="ch1-s0">
+        <h3>1.1 &nbsp;The gap mutexes leave</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        A mutex answers "may I touch this data?" It does not answer "has this data reached the state I need?" A coder thread doesn't want the dongle mutex for its own sake — it wants the dongle to be <em>free</em>. If it locks the mutex and finds the dongle busy, it must release the mutex (or nobody could ever free the dongle) and try again later. Mutexes alone give you no way to wait for a <em>condition</em>.</div>
+        <p>That's the entire gap condition variables fill: a way to say "sleep until someone tells me this state might have changed," without holding the lock that would prevent the change.</p>
+      </div>
+
+      <div class="section" id="ch1-s1">
+        <h3>1.2 &nbsp;The naive fix: polling</h3>
+        <pre><code>// Works, but wasteful
+while (1) {
+    pthread_mutex_lock(&amp;mtx);
+    if (both_dongles_free(coder)) { take_them(); pthread_mutex_unlock(&amp;mtx); break; }
+    pthread_mutex_unlock(&amp;mtx);
+    usleep(1000);   // ← guessing
+}</code></pre>
+        <table>
+          <tr><th>Poll interval</th><th>Problem</th></tr>
+          <tr><td>Too short (e.g. 10µs)</td><td>Burns CPU on constant lock/unlock cycles; hammers the cache line (Course 4)</td></tr>
+          <tr><td>Too long (e.g. 50ms)</td><td>Adds up to 50ms of latency after the dongle actually frees — in Codexion, potentially the difference between compiling and burning out</td></tr>
+        </table>
+        <div class="why-box"><span class="tag">The core problem with polling</span>
+        You're guessing. The information you need — "the dongle just became free" — is known precisely, at the exact instant it happens, by the thread that freed it. Polling throws that knowledge away and reconstructs it by repeatedly asking. A condition variable lets the thread that <em>knows</em> tell the threads that <em>care</em>, with no guessing and no latency.</div>
+      </div>
+
+      <div class="section" id="ch1-s2">
+        <h3>1.3 &nbsp;Sleeping properly</h3>
+        <p>Recall the thread states (Course 2): a polling thread cycles Ready → Running → Ready, endlessly competing for CPU it can't use productively. A thread blocked on a condition variable enters <strong>Blocked</strong> — off the runqueue entirely, consuming zero scheduler attention, until an actual event moves it back to Ready. Underneath, this is the same futex sleep mechanism as a contended mutex (Course 5, Chapter 3).</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is why the subject offers <code>pthread_cond_t</code> in the mandatory function list and says a condition variable "may be used to manage waiting queues." With 200 coders and tight cooldowns, 199 polling threads would be a genuine performance disaster and would add unpredictable latency to dongle handoffs — which directly threatens the 10ms burnout-detection precision requirement.</div>
+        <div id="ch1-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 1 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why can't a coder simply hold the dongle mutex while waiting for the dongle to become free?</li>
+          <li>Name the two independent costs of polling, and explain why tuning the interval can't eliminate both.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 2 ============ -->
+    <section class="chapter" id="ch2">
+      <div class="chapter-label">Chapter 02</div>
+      <h2>pthread_cond_wait()</h2>
+
+      <div class="section" id="ch2-s0">
+        <h3>2.1 &nbsp;The signature and the contract</h3>
+        <pre><code>int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);</code></pre>
+        <p>The contract, stated exactly:</p>
+        <ol>
+          <li><strong>Precondition:</strong> the calling thread must already hold <code>mutex</code>.</li>
+          <li><strong>Atomically</strong>: release <code>mutex</code> and begin waiting on <code>cond</code>. No observable gap between the two.</li>
+          <li>Block until signaled (or spuriously woken — Chapter 5).</li>
+          <li><strong>Before returning</strong>: reacquire <code>mutex</code>. This may itself block if another thread holds it.</li>
+        </ol>
+        <div class="why-box"><span class="tag">Why it takes the mutex as a parameter</span>
+        This surprises people: why does a "wait for a condition" function need a lock? Because steps 2 and 3 must be indivisible. The condition you're waiting on is shared state protected by that mutex — you checked it while holding the lock, and you must not release the lock and go to sleep as two separate steps, or a signal can slip into the gap. Chapter 4 dissects that failure precisely.</div>
+      </div>
+
+      <div class="section" id="ch2-s1">
+        <h3>2.2 &nbsp;The canonical pattern</h3>
+        <pre><code>pthread_mutex_lock(&amp;dongle_mtx);
+while (!both_dongles_free(coder))          // while — never if
+    pthread_cond_wait(&amp;dongle_cv, &amp;dongle_mtx);
+take_both_dongles(coder);                   // mutex is held again here
+pthread_mutex_unlock(&amp;dongle_mtx);</code></pre>
+        <p>Read it carefully. The mutex is held when you check the condition. It's released while you sleep. It's held again when <code>pthread_cond_wait</code> returns, so the <code>while</code> re-check and the subsequent <code>take_both_dongles()</code> are both safely inside the critical section. At no point do you inspect or mutate shared state without the lock.</p>
+      </div>
+
+      <div class="section" id="ch2-s2">
+        <h3>2.3 &nbsp;The timed variant</h3>
+        <pre><code>struct timespec deadline;
+clock_gettime(CLOCK_REALTIME, &amp;deadline);
+deadline.tv_sec += 1;
+int rc = pthread_cond_timedwait(&amp;cv, &amp;mtx, &amp;deadline);
+if (rc == ETIMEDOUT) { /* the deadline passed */ }</code></pre>
+        <p>Two things trip people up. First, the timeout is an <strong>absolute</strong> point in time, not a duration — you must compute "now plus N" yourself. Second, on timeout it <em>still</em> reacquires the mutex before returning; ETIMEDOUT doesn't mean "returned without the lock."</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        <code>pthread_cond_timedwait</code> is in the subject's allowed list, which is a strong hint: it's the natural tool for a monitor thread that must wake to check burnout deadlines within 10ms, and for coders that need to bound how long they'll wait for a dongle whose cooldown expires at a known time. It lets you sleep exactly as long as needed, rather than polling (Chapter 1) or sleeping indefinitely.</div>
+        <div id="ch2-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 2 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>List the four steps of pthread_cond_wait's contract in order. Which two must be atomic with respect to each other, and why?</li>
+          <li>Is pthread_cond_timedwait's timeout a duration or an absolute time? What bug does confusing the two produce?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 3 ============ -->
+    <section class="chapter" id="ch3">
+      <div class="chapter-label">Chapter 03</div>
+      <h2>Wakeups: signal vs. broadcast</h2>
+
+      <div class="section" id="ch3-s0">
+        <h3>3.1 &nbsp;The two wake operations</h3>
+        <table>
+          <tr><th></th><th><code>pthread_cond_signal</code></th><th><code>pthread_cond_broadcast</code></th></tr>
+          <tr><td>Wakes</td><td>At least one waiter (unspecified which)</td><td>Every waiter</td></tr>
+          <tr><td>Underlying futex op</td><td><code>FUTEX_WAKE, 1</code></td><td><code>FUTEX_WAKE, INT_MAX</code></td></tr>
+          <tr><td>Use when</td><td>Exactly one waiter can possibly proceed, and any of them will do</td><td>The state change could satisfy several waiters, or different waiters wait on different predicates</td></tr>
+        </table>
+        <div class="why-box"><span class="tag">"Unspecified which" is not a footnote</span>
+        <code>pthread_cond_signal</code> gives you zero control over which waiter wakes. Not the longest-waiting one. Not the most urgent one. Whichever the kernel picks. If your program cares about the answer — and Codexion's fifo/edf requirement means yours does — the condition variable cannot supply it. Chapter 8 explains what to do instead.</div>
+      </div>
+
+      <div class="section" id="ch3-s1">
+        <h3>3.2 &nbsp;The thundering herd</h3>
+        <p>Broadcast wakes everyone. If only one waiter can actually proceed, the other N−1 wake up, reacquire the mutex one at a time, re-check their predicate, find it false, and go back to sleep. You've paid N context switches and N mutex acquisitions to accomplish one handoff. With 200 Codexion coders, that's a real, measurable cost — and it lands precisely when contention is highest.</p>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 460 170" xmlns="http://www.w3.org/2000/svg">
+            <text x="60" y="25" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--accent-refactor)">broadcast</text>
+            <line x1="60" y1="35" x2="60" y2="55" stroke="var(--accent-refactor)"/>
+            <rect x="20" y="60" width="70" height="26" rx="4" fill="none" stroke="var(--accent-take)"/>
+            <text x="55" y="77" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text)">coder 2</text>
+            <rect x="100" y="60" width="70" height="26" rx="4" fill="none" stroke="var(--accent-take)"/>
+            <text x="135" y="77" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text)">coder 3</text>
+            <rect x="180" y="60" width="70" height="26" rx="4" fill="none" stroke="var(--accent-take)"/>
+            <text x="215" y="77" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text)">coder 4</text>
+            <rect x="260" y="60" width="70" height="26" rx="4" fill="none" stroke="var(--accent-take)"/>
+            <text x="295" y="77" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text)">coder 5</text>
+            <rect x="340" y="60" width="70" height="26" rx="4" fill="none" stroke="var(--accent-compile)" stroke-width="2"/>
+            <text x="375" y="77" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text)">coder 6</text>
+            <text x="215" y="115" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">4 wake, re-check, sleep again — pure overhead</text>
+            <text x="375" y="115" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--accent-compile)">1 proceeds</text>
+            <text x="230" y="150" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text-dim)">Thundering herd: N wakeups, 1 unit of progress.</text>
+          </svg>
+          <div class="diagram-caption">Broadcast is correct here, but wasteful — signal would be cheaper if any single waiter would do.</div>
+        </div>
+      </div>
+
+      <div class="section" id="ch3-s2">
+        <h3>3.3 &nbsp;When broadcast is actually required</h3>
+        <p>Signal is not always a safe optimization. Use broadcast when:</p>
+        <ul>
+          <li><strong>Different waiters wait on different predicates.</strong> If coders waiting for dongle 3 and dongle 7 share one condition variable, signalling one waiter might wake a coder whose dongle is still busy — it re-checks, sleeps again, and the coder who <em>could</em> have proceeded never woke. The wakeup was consumed by the wrong thread. This is a genuine lost-wakeup bug, and broadcast fixes it (as does using one condition variable per dongle).</li>
+          <li><strong>One event enables multiple waiters.</strong> A "simulation is stopping" flag must wake every coder, not one.</li>
+        </ul>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — the stop flag</span>
+        When your monitor thread detects burnout, every coder thread blocked in <code>pthread_cond_wait</code> must wake up and notice the simulation is over, or they'll sleep forever and your <code>pthread_join</code> loop will hang. That's a textbook <code>pthread_cond_broadcast</code> — one event, all waiters must observe it. Course 10 covers the full stop-flag design.</div>
+        <div id="ch3-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 3 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Describe a concrete Codexion scenario where using <code>signal</code> instead of <code>broadcast</code> causes a coder to sleep forever.</li>
+          <li>Why is a thundering herd worse with 200 coders than with 5, and why does it strike at the worst possible moment?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 4 ============ -->
+    <section class="chapter" id="ch4">
+      <div class="chapter-label">Chapter 04</div>
+      <h2>Lost wakeups &amp; why unlock+sleep is atomic</h2>
+
+      <div class="section" id="ch4-s0">
+        <h3>4.1 &nbsp;The race, dissected</h3>
+        <div class="why-box"><span class="tag">The central idea of this course</span>
+        Suppose <code>pthread_cond_wait</code> were implemented naively as two separate steps: unlock the mutex, then sleep. Watch what happens when the timing is unkind.</div>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 470 200" xmlns="http://www.w3.org/2000/svg">
+            <text x="115" y="20" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--accent-take)">Coder 2 (waiting)</text>
+            <text x="355" y="20" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--accent-refactor)">Coder 5 (releasing)</text>
+            <text x="15" y="50" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">t1</text>
+            <text x="115" y="50" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text)">holds mtx, checks: dongle busy</text>
+            <text x="15" y="75" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">t2</text>
+            <text x="115" y="75" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text)">unlocks mtx</text>
+            <text x="15" y="100" font-family="IBM Plex Mono" font-size="9" fill="var(--accent-burnout)">t3</text>
+            <text x="355" y="100" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--accent-burnout)">locks mtx, frees dongle, SIGNALS</text>
+            <text x="15" y="125" font-family="IBM Plex Mono" font-size="9" fill="var(--accent-burnout)">t4</text>
+            <text x="115" y="125" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--accent-burnout)">...now goes to sleep</text>
+            <line x1="20" y1="140" x2="450" y2="140" stroke="var(--border)"/>
+            <text x="235" y="162" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text-dim)">The signal at t3 had no waiter to wake. Coder 2 sleeps at t4 —</text>
+            <text x="235" y="178" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text-dim)">and nothing will ever signal again. It waits forever, on a free dongle.</text>
+          </svg>
+          <div class="diagram-caption">The lost wakeup. Note the cruelty: the resource IS available, and the waiter never learns.</div>
+        </div>
+        <p>Signals are not queued. A <code>pthread_cond_signal</code> with no waiters currently registered is simply discarded — it doesn't linger for the next thread to wait. That's not a flaw; it's the definition. A condition variable is stateless: it wakes whoever is waiting <em>right now</em>, and remembers nothing.</p>
+      </div>
+
+      <div class="section" id="ch4-s1">
+        <h3>4.2 &nbsp;How atomicity closes the window</h3>
+        <p>Now the real implementation. <code>pthread_cond_wait</code> releases the mutex and registers as a waiter atomically — meaning no other thread holding that mutex can observe an intermediate state. Replay the timeline:</p>
+        <ul>
+          <li><strong>t1</strong> — Coder 2 holds the mutex, checks, finds the dongle busy.</li>
+          <li><strong>t2</strong> — Coder 2 calls <code>pthread_cond_wait</code>. It becomes a registered waiter <em>and</em> releases the mutex, as one step.</li>
+          <li><strong>t3</strong> — Only now can Coder 5 acquire the mutex. It frees the dongle and signals. Coder 2 is already registered, so the signal finds it.</li>
+        </ul>
+        <div class="why-box"><span class="tag">Why the mutex is the key</span>
+        Coder 5 cannot free the dongle without holding the mutex. Coder 2 checked the condition while holding that same mutex. So Coder 5 is <em>locked out</em> for the entire interval between Coder 2's check and Coder 2's registration as a waiter. There is no window. That's the whole trick — and it's why <code>pthread_cond_wait</code> takes the mutex as a parameter rather than you unlocking it yourself beforehand.</div>
+      </div>
+
+      <div class="section" id="ch4-s2">
+        <h3>4.3 &nbsp;Underneath: the futex connection</h3>
+        <p>This mirrors <code>FUTEX_WAIT</code> exactly (Course 5, Chapter 3): the kernel atomically rechecks the expected value and sleeps in one syscall, closing the same class of gap. Condition variables and mutexes are built on the same primitive because they face the same fundamental problem: <em>deciding to sleep, based on shared state, must not be interruptible between the decision and the sleep.</em></p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is a top-tier defense question. "Why does pthread_cond_wait take a mutex?" has a wrong-sounding-but-common answer ("to protect the condition variable") and a right one: <em>because unlocking and sleeping must be atomic, or a signal can be lost in the gap and a coder sleeps forever on an available dongle</em>. If you can draw the t1–t4 timeline above from memory, you've answered it completely.</div>
+        <div id="ch4-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 4 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Debugging exercise</div><ol>
+          <li>Draw the four-step lost-wakeup timeline from memory. Then annotate exactly which step becomes impossible once unlock+wait is atomic, and why.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Why not just call pthread_mutex_unlock() yourself and then a hypothetical cond_sleep()?" Explain the gap this creates and the coder it strands.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 5 ============ -->
+    <section class="chapter" id="ch5">
+      <div class="chapter-label">Chapter 05</div>
+      <h2>Spurious wakeups</h2>
+
+      <div class="section" id="ch5-s0">
+        <h3>5.1 &nbsp;What POSIX actually permits</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        POSIX explicitly allows <code>pthread_cond_wait</code> to return when <em>nobody signalled</em>. This is a <strong>spurious wakeup</strong>. It is not a bug in glibc, not a bug in your code, and not something to be fixed — it is documented, legal behavior that your code must tolerate.</div>
+        <p>Why permit something so apparently user-hostile? Because forbidding it would cost real performance for a guarantee that's free to work around. Guaranteeing "never wake without a signal" requires extra bookkeeping to precisely track which wake corresponds to which waiter — including handling interactions with signal delivery (a POSIX signal interrupting a futex wait causes a return), and glibc's own internal retry loops around futex requeue operations. Every implementation would pay that cost on every wait. Meanwhile, the workaround costs you exactly one keyword.</p>
+      </div>
+
+      <div class="section" id="ch5-s1">
+        <h3>5.2 &nbsp;while, not if</h3>
+        <pre><code>// WRONG — assumes waking means the condition is true
+pthread_mutex_lock(&amp;mtx);
+if (!both_dongles_free(coder))
+    pthread_cond_wait(&amp;cv, &amp;mtx);
+take_both_dongles(coder);        // ← may run when dongles are NOT free!
+pthread_mutex_unlock(&amp;mtx);
+
+// RIGHT — re-verifies after every wake
+pthread_mutex_lock(&amp;mtx);
+while (!both_dongles_free(coder))
+    pthread_cond_wait(&amp;cv, &amp;mtx);
+take_both_dongles(coder);
+pthread_mutex_unlock(&amp;mtx);</code></pre>
+        <p>The <code>while</code> makes spurious wakeups harmless: wake, re-check, find the condition still false, sleep again. No special handling, no detection, no distinction between "spurious" and "real but stale" wakeups needed — you simply never trust a wakeup as evidence of anything.</p>
+      </div>
+
+      <div class="section" id="ch5-s2">
+        <h3>5.3 &nbsp;Three reasons the loop is mandatory</h3>
+        <p>Spurious wakeups get the attention, but they're only one of three independent reasons the <code>while</code> is non-negotiable:</p>
+        <ol>
+          <li><strong>Spurious wakeups</strong> — POSIX permits waking with no signal at all.</li>
+          <li><strong>Stolen wakeups</strong> — you were signalled legitimately, but between your wake and your mutex reacquisition, a third thread barged in and took the dongle. Your condition is false again through no fault of the signaller.</li>
+          <li><strong>Broadcast</strong> — everyone wakes, but only one can proceed. The other N−1 <em>must</em> re-check and sleep again; that's the design working correctly.</li>
+        </ol>
+        <div class="why-box"><span class="tag">The unifying principle</span>
+        A wakeup is a <em>hint</em> that the state might have changed. It is never a promise that it did, or that it still has by the time you're running. The condition itself — checked under the mutex — is the only source of truth. This is why the loop isn't defensive programming; it's the correct model of what a condition variable is.</div>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        An <code>if</code> instead of a <code>while</code> is a classic Codexion bug that survives gentle testing. With 5 coders and generous timings, wakeups are mostly real and mostly unstolen, so it passes. Under the subject's Medium benchmark cases — 800ms cooldowns, heavy queueing, deliberate contention — the stolen-wakeup path fires, a coder takes a dongle another coder already holds, and you've failed the "no dongle duplication" check the evaluation scale explicitly tests for.</div>
+        <div id="ch5-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 5 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Name the three independent reasons a <code>while</code> loop around <code>pthread_cond_wait</code> is required. Which would still apply even if spurious wakeups were outlawed tomorrow?</li>
+          <li>Why does POSIX permit spurious wakeups rather than requiring implementations to prevent them?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">Debugging exercise</div><ol>
+          <li>A coder wakes from cond_wait when no dongle was released. Is this a bug in your code? What if a coder wakes and takes a dongle that another coder is already holding?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 6 ============ -->
+    <section class="chapter" id="ch6">
+      <div class="chapter-label">Chapter 06</div>
+      <h2>Producer–consumer</h2>
+
+      <div class="section" id="ch6-s0">
+        <h3>6.1 &nbsp;The canonical problem</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Producer–consumer is the pattern condition variables were essentially invented for, and it's worth learning because nearly every real coordination problem — including Codexion's — is a variation on it. One or more threads produce items into a bounded buffer; one or more consume them. Producers must wait when the buffer is full; consumers must wait when it's empty.</div>
+        <p>Two waiting conditions, two distinct predicates — which is exactly why it needs two condition variables sharing one mutex.</p>
+      </div>
+
+      <div class="section" id="ch6-s1">
+        <h3>6.2 &nbsp;The implementation</h3>
+        <pre><code>pthread_mutex_t mtx;
+pthread_cond_t  not_full, not_empty;
+int buf[N], count = 0;
+
+void produce(int item) {
+    pthread_mutex_lock(&amp;mtx);
+    while (count == N)                       // buffer full
+        pthread_cond_wait(&amp;not_full, &amp;mtx);
+    buf[count++] = item;
+    pthread_cond_signal(&amp;not_empty);         // a consumer may now proceed
+    pthread_mutex_unlock(&amp;mtx);
+}
+
+int consume(void) {
+    pthread_mutex_lock(&amp;mtx);
+    while (count == 0)                       // buffer empty
+        pthread_cond_wait(&amp;not_empty, &amp;mtx);
+    int item = buf[--count];
+    pthread_cond_signal(&amp;not_full);          // a producer may now proceed
+    pthread_mutex_unlock(&amp;mtx);
+    return item;
+}</code></pre>
+        <p>Every element of this course appears here: one mutex protecting all shared state (<code>buf</code>, <code>count</code>); two condition variables because there are two different things to wait for; <code>while</code> loops on both; and signalling the <em>other</em> side's condition variable after changing the state it cares about.</p>
+      </div>
+
+      <div class="section" id="ch6-s2">
+        <h3>6.3 &nbsp;Why two condition variables, not one</h3>
+        <p>You could use a single condition variable and broadcast on every change. It would be correct — and wasteful. Every producer would wake every consumer and vice versa, and most would immediately re-sleep (Chapter 3's thundering herd). Separate condition variables per predicate mean a signal only wakes threads that could actually make progress.</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This maps directly onto a design decision you face. One condition variable for all dongles, broadcast on every release, is simple and correct: every coder wakes, re-checks its own two dongles, and mostly goes back to sleep. One condition variable <em>per dongle</em> is more precise: releasing dongle 3 wakes only the (at most two) coders adjacent to it. The producer–consumer lesson is that the second approach scales better — and with 200 coders, "better" is measurable. Either is defensible; being able to explain the tradeoff is what matters.</div>
+        <div id="ch6-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 6 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Tracing exercise</div><ol>
+          <li>Buffer size 1. Producer P1 and P2 both call produce(); consumer C1 calls consume(). Trace every lock, wait, signal, and wake for an interleaving where P2 waits.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why does producer–consumer need two condition variables sharing one mutex, rather than two mutexes or one condition variable?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 7 ============ -->
+    <section class="chapter" id="ch7">
+      <div class="chapter-label">Chapter 07</div>
+      <h2>Condition variables in Codexion</h2>
+
+      <div class="section" id="ch7-s0">
+        <h3>7.1 &nbsp;What the subject actually requires</h3>
+        <p>The mandatory part states: dongle state must be protected by a <code>pthread_mutex_t</code>, and "a condition variable (<code>pthread_cond_t</code>) may be used to manage waiting queues." Note <em>may</em> — but then read the fairness requirement: dongles "must grant access according to <code>scheduler</code>," fifo or edf. Together these push you firmly toward condition variables, because polling cannot deliver the latency the 10ms burnout requirement demands, and raw mutexes cannot deliver ordering at all (Course 5, Chapter 4).</p>
+      </div>
+
+      <div class="section" id="ch7-s1">
+        <h3>7.2 &nbsp;The critical limitation</h3>
+        <div class="why-box"><span class="tag">Read this twice</span>
+        A condition variable gives you <strong>no control over which waiter wakes</strong>. Not FIFO. Not by deadline. Whichever the implementation picks. So a condition variable, by itself, <em>cannot implement Codexion's fairness requirement</em>. This is the single most important thing to understand about how condition variables fit into your design.</div>
+        <p>The resolution is a clean separation of concerns:</p>
+        <table>
+          <tr><th>Layer</th><th>Job</th><th>Mechanism</th></tr>
+          <tr><td>Mutex</td><td>Protect the integrity of shared state (dongle flags, the request heap)</td><td><code>pthread_mutex_t</code></td></tr>
+          <tr><td>Your heap</td><td>Decide <em>who is next</em> — fifo by arrival, edf by deadline</td><td>Your hand-written priority queue</td></tr>
+          <tr><td>Condition variable</td><td>Put waiters to sleep efficiently and wake them when state changes</td><td><code>pthread_cond_t</code></td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch7-s2">
+        <h3>7.3 &nbsp;The pattern that makes ordering work</h3>
+        <p>The trick is that each coder's predicate isn't just "is the dongle free" — it's <strong>"is the dongle free <em>and</em> am I the one the heap says goes next?"</strong>:</p>
+        <pre><code>pthread_mutex_lock(&amp;sim-&gt;mtx);
+heap_insert(sim-&gt;queue, make_request(coder));   // register interest, ordered by policy
+
+while (!(dongles_free(coder) &amp;&amp; heap_peek(sim-&gt;queue) == coder-&gt;id))
+    pthread_cond_wait(&amp;sim-&gt;cv, &amp;sim-&gt;mtx);      // wake, re-check, maybe sleep again
+
+heap_pop(sim-&gt;queue);
+take_dongles(coder);
+pthread_mutex_unlock(&amp;sim-&gt;mtx);</code></pre>
+        <p>Now it doesn't matter that the condition variable wakes an arbitrary coder. If the wrong one wakes, its predicate is false (the heap says someone else is next) and it sleeps again. Only the coder the <em>heap</em> selects can pass the <code>while</code>. The ordering policy lives entirely in your predicate — the condition variable is demoted to a pure sleep/wake mechanism, which is all it was ever able to be.</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — say this at defense</span>
+        "My condition variable doesn't implement fairness — it can't, it wakes an arbitrary waiter. My heap implements fairness, by making 'am I at the head of the queue?' part of every coder's wait predicate. The condition variable just handles sleeping efficiently." That sentence demonstrates you understand both primitives' actual contracts, and it's the design the subject's requirements corner you into once you understand them.</div>
+        <div id="ch7-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 7 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Explain why a condition variable alone cannot satisfy Codexion's fifo/edf fairness requirement, and exactly which component does satisfy it.</li>
+          <li>In the predicate <code>dongles_free(coder) &amp;&amp; heap_peek(queue) == coder-&gt;id</code>, what goes wrong if you drop the second conjunct?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"You use pthread_cond_signal. How do you know the coder with the earliest deadline is the one that gets the dongle?" Answer via the predicate, not the signal.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    </div><!-- /chapters-root -->
+
+  </main>
+</div>
+
+<script>
+/* ================= THEME ================= */
+function toggleTheme(){
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  document.getElementById('theme-toggle').textContent = isLight ? '☀ light mode' : '🌙 dark mode';
+}
+
+/* ================= PROGRESS BAR ================= */
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+});
+
+/* ================= HERO DIAGRAM (SVG, generated) ================= */
+(function(){
+  const N = 5, R = 110, cx=180, cy=150;
+  let coders = [], dongles = [];
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + i*(2*Math.PI/N);
+    coders.push({x: cx+R*Math.cos(a), y: cy+R*Math.sin(a), n:i+1});
+  }
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + (i+0.5)*(2*Math.PI/N);
+    dongles.push({x: cx+ (R-38)*Math.cos(a), y: cy+(R-38)*Math.sin(a)});
+  }
+  let svg = `<svg viewBox="0 0 360 320" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<circle cx="${cx}" cy="${cy}" r="34" fill="none" stroke="var(--accent-compile)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  svg += `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">QUANTUM</text>`;
+  svg += `<text x="${cx}" y="${cy+9}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">COMPILER</text>`;
+  dongles.forEach((d,i) => {
+    svg += `<rect x="${d.x-9}" y="${d.y-6}" width="18" height="12" rx="2" fill="var(--accent-take)" opacity="0.85"/>`;
+  });
+  coders.forEach(c => {
+    svg += `<circle cx="${c.x}" cy="${c.y}" r="20" fill="var(--bg-elev)" stroke="var(--accent-refactor)" stroke-width="2"/>`;
+    svg += `<text x="${c.x}" y="${c.y+4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" fill="var(--text)">${c.n}</text>`;
+  });
+  svg += `</svg>`;
+  document.getElementById('hero-diagram').innerHTML = svg;
+})();
+
+/* ================= QUIZ ENGINE ================= */
+function renderQuiz(container, q){
+  const div = document.createElement('div');
+  div.className = 'quiz';
+  div.innerHTML = `<div class="q-title">Check yourself</div><div class="q-text">${q.q}</div><div class="opts"></div><div class="feedback"></div>`;
+  const opts = div.querySelector('.opts');
+  q.options.forEach((opt, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.textContent = opt;
+    btn.onclick = () => {
+      const fb = div.querySelector('.feedback');
+      [...opts.children].forEach(b => b.disabled = true);
+      if(idx === q.correct){
+        btn.classList.add('correct');
+      } else {
+        btn.classList.add('wrong');
+        opts.children[q.correct].classList.add('correct');
+      }
+      fb.textContent = q.explain;
+      fb.classList.add('show');
+    };
+    opts.appendChild(btn);
+  });
+  container.appendChild(div);
+}
+</script>
+
+<script>
+/* ================= SIDEBAR NAV ================= */
+const chapterMeta = [
+  {n:1, title:"Waiting & sleeping", sections:["The gap mutexes leave","The naive fix: polling","Sleeping properly"]},
+  {n:2, title:"pthread_cond_wait()", sections:["The signature and the contract","The canonical pattern","The timed variant"]},
+  {n:3, title:"Wakeups: signal vs. broadcast", sections:["The two wake operations","The thundering herd","When broadcast is required"]},
+  {n:4, title:"Lost wakeups & atomicity", sections:["The race, dissected","How atomicity closes the window","The futex connection"]},
+  {n:5, title:"Spurious wakeups", sections:["What POSIX permits","while, not if","Three reasons the loop is mandatory"]},
+  {n:6, title:"Producer–consumer", sections:["The canonical problem","The implementation","Why two condition variables"]},
+  {n:7, title:"Condition variables in Codexion", sections:["What the subject requires","The critical limitation","The pattern that makes ordering work"]},
+];
+const navList = document.getElementById('nav-list');
+chapterMeta.forEach(ch => {
+  const wrap = document.createElement('div');
+  wrap.className = 'nav-chapter';
+  const head = document.createElement('div');
+  head.className = 'nav-chapter-head';
+  head.innerHTML = `<span class="num">${String(ch.n).padStart(2,'0')}</span><span>${ch.title}</span><span class="arrow">›</span>`;
+  head.onclick = () => wrap.classList.toggle('open');
+  wrap.appendChild(head);
+  const secs = document.createElement('div');
+  secs.className = 'nav-sections';
+  ch.sections.forEach((s,i) => {
+    const a = document.createElement('a');
+    a.href = `#ch${ch.n}-s${i}`;
+    a.textContent = s;
+    secs.appendChild(a);
+  });
+  wrap.appendChild(secs);
+  navList.appendChild(wrap);
+});
+// open chapter 1 by default
+navList.querySelector('.nav-chapter').classList.add('open');
+
+/* ================= QUIZ DATA ================= */
+renderQuiz(document.getElementById('ch1-quiz1'), {
+  q: "Why can't a coder simply hold the dongle mutex while waiting for the dongle to become free?",
+  options: [
+    "Because holding a mutex for more than 1ms is forbidden by POSIX.",
+    "Because the thread that would free the dongle needs that same mutex to do so — holding it while waiting guarantees the thing you're waiting for can never happen.",
+    "Because mutexes automatically expire after a short timeout.",
+    "It works fine, it's just slightly slower than using a condition variable."
+  ],
+  correct: 1,
+  explain: "Correct — this is a self-inflicted deadlock. You must release the lock to let the state change, which is precisely the gap condition variables fill: sleep without holding the lock, wake when told the state changed."
+});
+renderQuiz(document.getElementById('ch2-quiz1'), {
+  q: "Which two steps of pthread_cond_wait's contract must be atomic with respect to each other?",
+  options: [
+    "Reacquiring the mutex and returning to the caller.",
+    "Releasing the mutex and registering as a waiter on the condition variable — if these were separate, a signal could fire in the gap and be lost forever.",
+    "Checking the predicate and locking the mutex.",
+    "None of them — pthread_cond_wait makes no atomicity guarantees at all."
+  ],
+  correct: 1,
+  explain: "Right. That atomic unlock+wait is the entire reason the function takes a mutex parameter — it closes the lost-wakeup window that Chapter 4 dissects."
+});
+renderQuiz(document.getElementById('ch3-quiz1'), {
+  q: "Your monitor thread detects a burnout and sets the stop flag. Coder threads are blocked in pthread_cond_wait. Should it signal or broadcast?",
+  options: [
+    "signal — waking one coder is enough, it will wake the others.",
+    "broadcast — every blocked coder must observe the stop flag, or the ones that never wake will sleep forever and your pthread_join loop will hang.",
+    "Neither — setting the flag automatically wakes all waiters.",
+    "signal, called once per coder in a loop, is the only correct approach."
+  ],
+  correct: 1,
+  explain: "Correct. One event that must be observed by all waiters is the textbook broadcast case — and here, getting it wrong means your program hangs at shutdown instead of exiting cleanly."
+});
+renderQuiz(document.getElementById('ch4-quiz1'), {
+  q: "A signal is sent on a condition variable when no thread is currently waiting. What happens to it?",
+  options: [
+    "It's queued and delivered to the next thread that calls pthread_cond_wait.",
+    "It's discarded entirely — condition variables are stateless and wake only whoever is registered as waiting at that instant; they remember nothing.",
+    "It causes pthread_cond_signal to return an error code.",
+    "It's stored in the mutex until a waiter appears."
+  ],
+  correct: 1,
+  explain: "Right — and this is exactly why the lost-wakeup race is fatal without atomic unlock+wait: a signal that arrives before you register as a waiter is simply gone."
+});
+renderQuiz(document.getElementById('ch5-quiz1'), {
+  q: "Which of these reasons for using `while` instead of `if` around pthread_cond_wait would STILL apply even if spurious wakeups were outlawed tomorrow?",
+  options: [
+    "None — spurious wakeups are the only reason the loop exists.",
+    "Stolen wakeups (a third thread takes the resource between your wake and your mutex reacquisition) and broadcast (all wake, only one can proceed) both independently require re-checking.",
+    "Only the fact that `if` is slower to compile than `while`.",
+    "Only the requirement that POSIX functions be called in loops."
+  ],
+  correct: 1,
+  explain: "Correct. Spurious wakeups get the attention, but the loop would still be mandatory without them — a wakeup is always just a hint that state might have changed, never a promise it still has."
+});
+renderQuiz(document.getElementById('ch6-quiz1'), {
+  q: "Why does the producer–consumer pattern use two condition variables (not_full, not_empty) sharing one mutex, rather than one condition variable?",
+  options: [
+    "Because POSIX requires a separate condition variable for each thread.",
+    "Because there are two distinct predicates to wait on — a single shared CV would force broadcasting on every change, waking producers and consumers indiscriminately so most immediately re-sleep (thundering herd).",
+    "Because one mutex can only be paired with one condition variable at a time.",
+    "Because two condition variables make the buffer twice as fast."
+  ],
+  correct: 1,
+  explain: "Right. Separate CVs per predicate mean a signal only wakes threads that could actually make progress — the same reasoning behind per-dongle CVs in Codexion."
+});
+renderQuiz(document.getElementById('ch7-quiz1'), {
+  q: "You use pthread_cond_signal, which wakes an arbitrary waiter. How does your Codexion program still guarantee the coder with the earliest deadline gets the dongle under edf?",
+  options: [
+    "pthread_cond_signal wakes waiters in deadline order automatically when using edf.",
+    "The ordering lives in the wait predicate, not the signal: each coder loops until `dongle is free AND the heap says I'm next`. A wrongly-woken coder finds its predicate false and sleeps again — only the heap's chosen coder can pass.",
+    "You must call pthread_cond_broadcast instead; signal cannot work with edf.",
+    "The kernel reads the deadline from the coder's task_struct and orders wakeups accordingly."
+  ],
+  correct: 1,
+  explain: "Exactly. The condition variable is demoted to a pure sleep/wake mechanism; your heap owns the arbitration policy via the predicate. This separation is the heart of the intended Codexion design."
+});
+</script>
+
+</body>
+</html>

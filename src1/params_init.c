@@ -1,61 +1,88 @@
 # include "codexion.h"
 
 
-void    dongle_init(t_shared   *shared)
+int    dongles_init(t_shared   *shared)
 {
-    
-    for (int i = 0; i < shared->params.num_coders; i++)
+    int i;
+    int res;
+
+    i = 0;
+    while (i < shared->params.num_coders)
     {
-        shared->dongles[i].used = -1;
-        shared->dongles[i].released_at = 0;
-        pthread_mutex_init(&shared->dongles[i].dongle_mutex, NULL);
-        pthread_cond_init(&shared->dongles[i].dongle_wait, NULL);
-        
-        shared->dongles[i].size = 0;
+        res = dongle_init(&shared->dongles[i]);
+        if (res == -1)
+        {
+            clean_dongles(shared->dongles, 1, i - 1);
+            return -1;
+        }
+        if (res == -2)
+        {
+            clean_dongles(shared->dongles, 0, i);
+            return -1;
+        }
+        i++;
     }
+    return shared->params.num_coders;
 }
 
-void    coders_init(t_coder *coders, t_shared  *shared)
+
+int    coders_init(t_coder *coders, t_shared  *shared)
 {
-    
-    for (int i = 0; i < shared->params.num_coders; i++)
+    int i;
+
+    i = 0;
+    while ( i < shared->params.num_coders)
     {
         coders[i].id = i;
-        if(i % 2 == 0)
-        {
-            coders[i].dongle_index_1 = i;
-            coders[i].dongle_index_2 = (i + 1) % (shared->params.num_coders);
-        }
-        else
-        {
-            usleep(1000);
-            coders[i].dongle_index_1 = (i + 1) % (shared->params.num_coders);
-            coders[i].dongle_index_2 = i;
-        }
+        coder_dongle_init(&coders[i], i, shared);
         coders[i].compile_count = 0;
-        pthread_mutex_init(&coders[i].compile_count_mutex, NULL);
+        if (pthread_mutex_init(&coders[i].compile_count_mutex, NULL) != 0)
+            return i;
 
         coders[i].last_compile_start = 0;
         coders[i].shared = shared;
         coders[i].num_dongles_held = 0;
+        i++;
     }
+    return shared->params.num_coders;
 }
 
 
-void    shared_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles)
+int    shared_init(t_shared  *shared, t_coder *coders, t_dongle  *dongles)
 {
     shared->dongles = dongles;
     shared->coders = coders;
     shared->start = now_ms();
     shared->stop = 0;
-    pthread_mutex_init(&shared->print_mutex, NULL);
-    pthread_mutex_init(&shared->stop_mutex, NULL); 
+    if (pthread_mutex_init(&shared->print_mutex, NULL) != 0)
+        return -1;
+    if (pthread_mutex_init(&shared->stop_mutex, NULL) != 0)
+    {
+        pthread_mutex_destroy(&shared->print_mutex);
+        return -1;
+    }
+    return 0;
 }
 
-void    params_initialisation(t_shared  *shared, t_coder    *coders, t_dongle   *dongles)
+int    params_initialisation(t_shared  *shared, t_coder    *coders, t_dongle   *dongles)
 {
-   dongle_init(shared);
-    coders_init(coders, shared);
-    shared_init(shared, coders, dongles);
+    int n;
+    int succ_dong;
+    int succ_cods;
+    int sh_check;
 
+    n = shared->params.num_coders;
+    succ_dong = dongles_init(shared);
+    succ_cods = coders_init(coders, shared);
+    sh_check = shared_init(shared, coders, dongles);
+    if (succ_cods != n || succ_dong != n ||  sh_check != 0)
+    {
+        if (sh_check == 0)
+            clean_shared(shared);
+        if (succ_dong > 0)
+            clean_dongles(dongles, 1, n - 1);
+        clean_coders(coders, succ_cods);
+        return -1;
+    }
+    return 0;
 }

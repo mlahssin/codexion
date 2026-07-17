@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codexion Course 8: Timing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f14; --bg-elev:#12151c; --bg-card:#171b24; --border:#252b38;
+  --text:#e7e9ee; --text-dim:#9aa3b5; --text-faint:#5c6478;
+  --accent-take:#5ee6ff;   /* has taken a dongle */
+  --accent-compile:#4f8cff; /* compiling */
+  --accent-debug:#ffb454;   /* debugging */
+  --accent-refactor:#b98eff;/* refactoring */
+  --accent-burnout:#ff5470; /* burned out */
+  --mono:'IBM Plex Mono', monospace;
+  --sans:'Inter', sans-serif;
+  --radius:10px;
+}
+html[data-theme="light"]{
+  --bg:#f5f6f8; --bg-elev:#ffffff; --bg-card:#ffffff; --border:#dde1e8;
+  --text:#191c22; --text-dim:#565f70; --text-faint:#8890a0;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  line-height:1.65; font-size:16px; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent-compile);}
+code, .mono{font-family:var(--mono);}
+
+/* ---------- Progress bar ---------- */
+#progress-bar{position:fixed; top:0; left:0; height:3px; background:linear-gradient(90deg,var(--accent-take),var(--accent-compile),var(--accent-debug),var(--accent-refactor)); width:0%; z-index:1000; transition:width .1s linear;}
+
+/* ---------- Layout ---------- */
+#app{display:flex; min-height:100vh;}
+#sidebar{
+  width:300px; flex-shrink:0; background:var(--bg-elev); border-right:1px solid var(--border);
+  position:sticky; top:0; height:100vh; overflow-y:auto; padding:20px 0 60px;
+}
+#sidebar .brand{padding:0 20px 16px; border-bottom:1px solid var(--border); margin-bottom:12px;}
+#sidebar .brand-title{font-family:var(--mono); font-weight:700; font-size:1.05rem; letter-spacing:.02em;}
+#sidebar .brand-sub{color:var(--text-faint); font-size:.78rem; margin-top:4px;}
+#theme-toggle{
+  margin-top:12px; background:var(--bg-card); border:1px solid var(--border); color:var(--text);
+  padding:6px 12px; border-radius:20px; font-size:.75rem; cursor:pointer; font-family:var(--mono);
+}
+.nav-chapter{border-bottom:1px solid var(--border);}
+.nav-chapter-head{
+  display:flex; align-items:center; gap:10px; padding:10px 20px; cursor:pointer; user-select:none;
+  font-size:.86rem; color:var(--text-dim); transition:color .15s;
+}
+.nav-chapter-head:hover{color:var(--text);}
+.nav-chapter-head .num{font-family:var(--mono); color:var(--text-faint); font-size:.75rem; width:20px; flex-shrink:0;}
+.nav-chapter-head .arrow{margin-left:auto; transition:transform .2s; font-size:.7rem; color:var(--text-faint);}
+.nav-chapter.open .arrow{transform:rotate(90deg);}
+.nav-sections{max-height:0; overflow:hidden; transition:max-height .25s ease;}
+.nav-chapter.open .nav-sections{max-height:500px;}
+.nav-sections a{
+  display:block; padding:6px 20px 6px 50px; font-size:.8rem; color:var(--text-faint);
+  text-decoration:none; border-left:2px solid transparent;
+}
+.nav-sections a:hover, .nav-sections a.active{color:var(--accent-compile); border-left-color:var(--accent-compile);}
+
+#main{flex:1; min-width:0; max-width:900px; margin:0 auto; padding:60px 48px 160px;}
+
+/* ---------- Hero ---------- */
+.hero{padding:20px 0 50px; border-bottom:1px solid var(--border); margin-bottom:50px;}
+.hero-eyebrow{font-family:var(--mono); font-size:.78rem; color:var(--accent-take); letter-spacing:.08em; text-transform:uppercase; margin-bottom:14px;}
+.hero h1{font-family:var(--mono); font-size:2.4rem; font-weight:700; line-height:1.15; margin-bottom:16px;}
+.hero p.lead{color:var(--text-dim); font-size:1.08rem; max-width:640px; margin-bottom:32px;}
+.legend{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:36px;}
+.legend .chip{
+  display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:.76rem;
+  padding:6px 12px; border-radius:20px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-dim);
+}
+.legend .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+
+/* ---------- Chapter content ---------- */
+.chapter{margin-bottom:90px; scroll-margin-top:20px;}
+.chapter-label{font-family:var(--mono); color:var(--text-faint); font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px;}
+.chapter h2{font-family:var(--mono); font-size:1.9rem; margin-bottom:26px; padding-bottom:16px; border-bottom:1px solid var(--border);}
+.section{scroll-margin-top:20px; margin-bottom:44px;}
+.section h3{font-size:1.25rem; margin-bottom:14px; font-weight:700;}
+.section h4{font-size:1.02rem; margin:20px 0 10px; font-weight:700; color:var(--text-dim);}
+.section p{margin-bottom:14px; max-width:70ch;}
+.section ul, .section ol{margin:0 0 14px 22px;}
+.section li{margin-bottom:6px;}
+
+.why-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-take);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.why-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-take); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.codexion-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-refactor);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.codexion-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-refactor); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.analogy-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-debug);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.analogy-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+pre{
+  background:#08090c; border:1px solid var(--border); border-radius:8px; padding:16px 18px;
+  overflow-x:auto; margin:16px 0; font-size:.86rem; line-height:1.55;
+}
+html[data-theme="light"] pre{background:#f0f1f4;}
+pre code{font-family:var(--mono); color:#c8ccd8;}
+html[data-theme="light"] pre code{color:#2b2f3a;}
+.log-line{display:block;}
+.log-ts{color:var(--text-faint);}
+.log-take{color:var(--accent-take);}
+.log-compile{color:var(--accent-compile);}
+.log-debug{color:var(--accent-debug);}
+.log-refactor{color:var(--accent-refactor);}
+.log-burnout{color:var(--accent-burnout); font-weight:600;}
+
+.expandable{border:1px solid var(--border); border-radius:8px; margin:16px 0; overflow:hidden;}
+.expandable summary{
+  padding:13px 18px; cursor:pointer; font-weight:600; font-size:.92rem; background:var(--bg-card);
+  list-style:none; display:flex; align-items:center; gap:10px;
+}
+.expandable summary::-webkit-details-marker{display:none;}
+.expandable summary::before{content:'+'; font-family:var(--mono); color:var(--accent-compile); font-weight:700;}
+.expandable[open] summary::before{content:'−';}
+.expandable .body{padding:16px 18px; border-top:1px solid var(--border);}
+
+svg{max-width:100%; height:auto;}
+.diagram-wrap{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:24px; margin:20px 0; text-align:center;}
+.diagram-caption{font-size:.82rem; color:var(--text-faint); margin-top:10px; font-family:var(--mono);}
+
+/* ---------- Quiz ---------- */
+.quiz{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:22px 24px; margin:20px 0;}
+.quiz .q-title{font-family:var(--mono); font-size:.75rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px;}
+.quiz .q-text{font-weight:600; margin-bottom:14px;}
+.quiz .opts{display:flex; flex-direction:column; gap:8px;}
+.quiz button.opt{
+  text-align:left; padding:11px 14px; background:var(--bg-elev); border:1px solid var(--border); border-radius:7px;
+  color:var(--text); cursor:pointer; font-family:var(--sans); font-size:.92rem; transition:.15s;
+}
+.quiz button.opt:hover{border-color:var(--accent-compile);}
+.quiz button.opt.correct{border-color:#3ecf8e; background:rgba(62,207,142,.12);}
+.quiz button.opt.wrong{border-color:var(--accent-burnout); background:rgba(255,84,112,.12);}
+.quiz .feedback{margin-top:12px; font-size:.88rem; color:var(--text-dim); display:none;}
+.quiz .feedback.show{display:block;}
+
+/* ---------- Exercises ---------- */
+.exercises{background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:24px 26px; margin-top:30px;}
+.exercises h4{font-family:var(--mono); font-size:.8rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;}
+.ex-group{margin-top:16px;}
+.ex-group .ex-label{font-size:.78rem; color:var(--accent-take); font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;}
+.ex-group ol{margin-left:20px;}
+.ex-group li{margin-bottom:8px; color:var(--text-dim); font-size:.94rem;}
+
+table{width:100%; border-collapse:collapse; margin:16px 0; font-size:.9rem;}
+th,td{border:1px solid var(--border); padding:8px 12px; text-align:left;}
+th{background:var(--bg-card); font-family:var(--mono); font-size:.78rem; text-transform:uppercase;}
+
+.nav-footer{display:flex; justify-content:space-between; margin-top:60px; padding-top:24px; border-top:1px solid var(--border);}
+.nav-footer a{font-family:var(--mono); font-size:.85rem; text-decoration:none; color:var(--text-dim); display:flex; flex-direction:column;}
+.nav-footer a:hover{color:var(--accent-compile);}
+.nav-footer .lbl{font-size:.7rem; color:var(--text-faint); text-transform:uppercase; margin-bottom:4px;}
+
+@media (max-width:860px){
+  #sidebar{position:fixed; left:-300px; z-index:900; transition:left .2s; box-shadow:0 0 40px rgba(0,0,0,.4);}
+  #sidebar.open{left:0;}
+  #main{padding:60px 20px 120px; max-width:100%;}
+  #menu-btn{display:flex !important;}
+}
+#menu-btn{
+  display:none; position:fixed; top:16px; left:16px; z-index:950; width:40px; height:40px;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:8px; color:var(--text);
+  align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem;
+}
+</style>
+</head>
+<body>
+<div id="progress-bar"></div>
+<div id="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</div>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="brand">
+      <div class="brand-title">// codexion — course 8</div>
+      <div class="brand-sub">Timing</div>
+      <button id="theme-toggle" onclick="toggleTheme()">☀ light mode</button>
+    </div>
+    <div id="nav-list"></div>
+  </nav>
+
+  <main id="main">
+
+    <section class="hero">
+      <div class="hero-eyebrow">Course 8 of the Codexion series</div>
+      <h1>Timing</h1>
+      <p class="lead">Codexion is a real-time problem wearing a concurrency costume. Every requirement — burn out at exactly this deadline, log it within 10ms, hold the dongles for precisely this long, don't grant one until its cooldown elapses — is a claim about time. This course covers where timestamps actually come from, why one clock can run backwards and the other can't, why a sleep is a floor and never a ceiling, and why the gap between your thread becoming runnable and actually running is the real limit on precision. It ends where the subject's hardest requirement lives: detecting burnout within 10ms.</p>
+      <div class="legend">
+        <div class="chip"><span class="dot" style="background:var(--accent-take)"></span> has taken a dongle</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-compile)"></span> compiling</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-debug)"></span> debugging</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-refactor)"></span> refactoring</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-burnout)"></span> burned out</div>
+      </div>
+      <div class="diagram-wrap" id="hero-diagram"></div>
+      <div class="diagram-caption">The Codexion hub: N coders in a circle, N dongles between them, one shared Quantum Compiler in the center.</div>
+    </section>
+
+    <div id="chapters-root">
+
+    <!-- ============ CHAPTER 1 ============ -->
+    <section class="chapter" id="ch1">
+      <div class="chapter-label">Chapter 01</div>
+      <h2>Clocks: gettimeofday() &amp; clock_gettime()</h2>
+
+      <div class="section" id="ch1-s0">
+        <h3>1.1 &nbsp;Where "what time is it" actually comes from</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Your CPU has no idea what time it is. What it has is a <strong>counter</strong> — most commonly the x86 TSC (Time Stamp Counter), a register that increments at a known rate. The kernel calibrates that counter against a reference, tracks an offset, and turns "counter value" into "seconds since the epoch." Every timestamp in your Codexion log traces back through that translation.</div>
+        <p>The kernel exposes several <strong>clock sources</strong> (TSC, HPET, ACPI PM timer) and picks the best available — you can see the choice on your machine:</p>
+        <pre><code>cat /sys/devices/system/clocksource/clocksource0/current_clocksource</code></pre>
+      </div>
+
+      <div class="section" id="ch1-s1">
+        <h3>1.2 &nbsp;The two APIs</h3>
+        <pre><code>// gettimeofday — the older POSIX interface, microsecond resolution
+struct timeval tv;
+gettimeofday(&amp;tv, NULL);
+long ms = tv.tv_sec * 1000L + tv.tv_usec / 1000;
+
+// clock_gettime — the modern one, nanosecond resolution, selectable clock
+struct timespec ts;
+clock_gettime(CLOCK_MONOTONIC, &amp;ts);
+long ms = ts.tv_sec * 1000L + ts.tv_nsec / 1000000;</code></pre>
+        <table>
+          <tr><th></th><th><code>gettimeofday</code></th><th><code>clock_gettime</code></th></tr>
+          <tr><td>Resolution</td><td>Microseconds (<code>struct timeval</code>)</td><td>Nanoseconds (<code>struct timespec</code>)</td></tr>
+          <tr><td>Clock choice</td><td>None — always wall-clock time</td><td>Selectable: MONOTONIC, REALTIME, and others</td></tr>
+          <tr><td>Status</td><td>Marked obsolete in POSIX.1-2008</td><td>The recommended interface</td></tr>
+          <tr><td>In Codexion's allowed list?</td><td><strong>Yes</strong></td><td>Not listed — though <code>pthread_cond_timedwait</code> needs a <code>timespec</code></td></tr>
+        </table>
+        <div class="why-box"><span class="tag">Resolution is not accuracy</span>
+        <code>clock_gettime</code> reports nanoseconds. That does not mean it's accurate to a nanosecond — the underlying counter has its own granularity, and reading the clock itself costs time. Reporting a value with nine decimal places says nothing about how many of them are meaningful. For Codexion's millisecond-scale timings, both APIs are far more precise than you need; the real limits come from scheduling (Chapter 5), not the clock.</div>
+      </div>
+
+      <div class="section" id="ch1-s2">
+        <h3>1.3 &nbsp;The vDSO: why reading the clock is nearly free</h3>
+        <p>Asking the kernel for the time sounds like it should be a syscall — a mode switch, hundreds of nanoseconds. If your monitor thread polls burnout deadlines frequently, that cost would matter. So Linux cheats, legitimately: the <strong>vDSO</strong> (virtual dynamic shared object) is a small page the kernel maps into every process, containing both the code and the current timekeeping data needed to compute the time <em>in userspace</em>.</p>
+        <p>So <code>clock_gettime(CLOCK_MONOTONIC, …)</code> typically executes entirely in your process — read the TSC, apply the kernel-maintained scaling factors from the shared page, return. No syscall, no mode switch, tens of nanoseconds.</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is why "my monitor thread checks the time constantly, isn't that expensive?" has a reassuring answer: reading the clock is one of the cheapest things you can do. Your monitor's cost is dominated by how often it <em>sleeps and wakes</em> (Chapter 4), not by asking the time.</div>
+        <div id="ch1-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 1 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>What does the vDSO let your process do without a syscall, and why does that matter for a polling monitor thread?</li>
+          <li>Explain the difference between a clock's resolution and its accuracy. Why is nanosecond resolution not automatically useful?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 2 ============ -->
+    <section class="chapter" id="ch2">
+      <div class="chapter-label">Chapter 02</div>
+      <h2>Monotonic vs. realtime clocks</h2>
+
+      <div class="section" id="ch2-s0">
+        <h3>2.1 &nbsp;Wall-clock time can move backwards</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        <code>CLOCK_REALTIME</code> answers "what time is it in the world?" — and the world's answer can change. NTP adjusts it. An administrator can set it. Daylight saving, leap seconds, a VM resuming from a snapshot. It can jump forward, and critically, <strong>it can jump backward</strong>. Any code that computes a duration by subtracting two realtime readings is one <code>ntpd</code> correction away from a negative elapsed time.</div>
+        <table>
+          <tr><th></th><th><code>CLOCK_REALTIME</code></th><th><code>CLOCK_MONOTONIC</code></th></tr>
+          <tr><td>Measures</td><td>Wall-clock time since the Unix epoch</td><td>Time since an arbitrary point (typically boot)</td></tr>
+          <tr><td>Can jump?</td><td>Yes — forward or backward, at any moment</td><td>Never. Only moves forward, steadily.</td></tr>
+          <tr><td>Meaningful across machines?</td><td>Yes</td><td>No — the origin is arbitrary and local</td></tr>
+          <tr><td>Right for measuring durations?</td><td><strong>No</strong></td><td><strong>Yes</strong></td></tr>
+          <tr><td>Right for "wake me at 3pm"?</td><td>Yes</td><td>No</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch2-s1">
+        <h3>2.2 &nbsp;The rule</h3>
+        <div class="why-box"><span class="tag">The one-liner worth memorizing</span>
+        <strong>Use REALTIME for a point in the world. Use MONOTONIC for an interval.</strong> Every Codexion timing question — how long since this coder started compiling, how long until its burnout deadline, has the cooldown elapsed — is an interval question.</div>
+        <p>Consider what a backward jump does to Codexion. A coder started compiling at wall-clock t=1000. Mid-compile, NTP corrects the clock back 2 seconds. Now <code>now() - last_compile_start</code> is negative. Your burnout check compares against a deadline that's suddenly 2 seconds further away than it should be. Or worse, depending on your arithmetic and types, an unsigned subtraction underflows into an enormous positive number and every coder appears to have burned out simultaneously.</p>
+      </div>
+
+      <div class="section" id="ch2-s2">
+        <h3>2.3 &nbsp;The awkward part: what the subject allows</h3>
+        <p>Codexion's allowed external functions include <code>gettimeofday</code> — which is <em>always</em> wall-clock — and not <code>clock_gettime</code>. And the subject says outright: "real-time measurements using <code>gettimeofday()</code> are acceptable and recommended for simplicity."</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — how to handle this honestly</span>
+        Use <code>gettimeofday</code>. The subject recommends it, it's in the allowed list, and over a simulation lasting seconds on a machine that isn't being reconfigured mid-run, the risk of an NTP step is negligible. But <em>know</em> that it's a wall-clock source and that this would be the wrong choice in production code measuring intervals. If an evaluator asks "why not a monotonic clock?", the strong answer is: "Because the subject specifies <code>gettimeofday</code> and it's sufficient for a short-lived simulation — but in production I'd use <code>CLOCK_MONOTONIC</code>, because <code>gettimeofday</code> can step backward under NTP and every timing question here is really an interval question." That answer shows you know the tradeoff rather than being unaware of it.</div>
+        <p>One related note: <code>pthread_cond_timedwait</code> defaults to <code>CLOCK_REALTIME</code> for its absolute deadline — consistent with <code>gettimeofday</code>, so at least your two time sources agree.</p>
+        <div id="ch2-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 2 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>State the rule for choosing between REALTIME and MONOTONIC in one sentence. Which does every Codexion timing question need?</li>
+          <li>Trace what happens to a burnout check if the wall clock steps backward 2 seconds mid-simulation, assuming unsigned arithmetic.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Why did you use gettimeofday instead of a monotonic clock?" Answer without pretending the tradeoff doesn't exist.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 3 ============ -->
+    <section class="chapter" id="ch3">
+      <div class="chapter-label">Chapter 03</div>
+      <h2>Timer interrupts &amp; hrtimers</h2>
+
+      <div class="section" id="ch3-s0">
+        <h3>3.1 &nbsp;How the kernel regains control</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        A running thread has the CPU. It's executing your instructions, not the kernel's. So how does the kernel ever preempt it (Course 3)? It can't — not by software. Something external must interrupt the CPU. That something is a <strong>hardware timer</strong>, programmed to fire an interrupt at a chosen moment, forcibly transferring control to the kernel's handler regardless of what the running thread wanted.</div>
+        <p>Every preemption, every expiring <code>usleep</code>, every <code>pthread_cond_timedwait</code> timeout ultimately rides on a hardware timer interrupt. It is the only mechanism by which "later, do this" becomes real.</p>
+      </div>
+
+      <div class="section" id="ch3-s1">
+        <h3>3.2 &nbsp;From periodic ticks to tickless</h3>
+        <p>Older kernels programmed the timer to fire at a fixed rate — <code>CONFIG_HZ</code>, often 100, 250, or 1000 times per second — and did all timekeeping and scheduling work on those ticks. That has an obvious flaw: timer granularity is capped at one tick. With HZ=250, a 1ms sleep can't be honored more precisely than 4ms.</p>
+        <p>Modern Linux uses <strong>hrtimers</strong> (high-resolution timers) and a tickless design: instead of a fixed drumbeat, the kernel keeps pending timer expirations in a red-black tree ordered by deadline, and programs the hardware to fire exactly when the <em>next</em> one is due. Fewer interrupts when idle, far better granularity when needed.</p>
+        <div class="why-box"><span class="tag">The pattern, again</span>
+        A red-black tree ordered by expiration time, so "what's next?" is the leftmost node. This is the third time this shape has appeared: CFS's runqueue (Course 3), the hrtimer queue (here), and your Codexion request heap. Whenever a system must repeatedly answer "which pending thing is soonest?", it reaches for the same structure. That's not a coincidence you should let pass at defense.</div>
+      </div>
+
+      <div class="section" id="ch3-s2">
+        <h3>3.3 &nbsp;What this bounds</h3>
+        <p>Hrtimers give sub-millisecond granularity — comfortably better than Codexion's 10ms burnout requirement. So the timer subsystem is <em>not</em> your limiting factor. The limit is what happens <em>after</em> the interrupt fires: the kernel must mark your thread runnable, and then the scheduler must actually give it a core. That gap is scheduler latency (Chapter 5), and it's where the real uncertainty lives.</p>
+        <div id="ch3-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 3 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why can't the kernel preempt a running thread through software alone? What's the only mechanism that makes preemption possible?</li>
+          <li>Name three kernel subsystems that use a tree/heap ordered by "soonest first," and explain what problem they all share.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 4 ============ -->
+    <section class="chapter" id="ch4">
+      <div class="chapter-label">Chapter 04</div>
+      <h2>usleep() and why sleep is never exact</h2>
+
+      <div class="section" id="ch4-s0">
+        <h3>4.1 &nbsp;What usleep actually promises</h3>
+        <div class="why-box"><span class="tag">Read the contract carefully</span>
+        <code>usleep(200000)</code> does <strong>not</strong> promise "resume in exactly 200ms." It promises "sleep for <em>at least</em> 200ms." The distinction is the whole chapter. Sleep functions have a lower bound and no upper bound — a sleep may overshoot arbitrarily, and nothing in POSIX says otherwise.</div>
+        <p>Mechanically: <code>usleep</code> arms an hrtimer, marks your thread <code>TASK_INTERRUPTIBLE</code>, removes it from the runqueue, and calls <code>schedule()</code>. When the timer fires, the kernel marks you <code>TASK_RUNNING</code> and puts you back on a runqueue — <em>runnable</em>, not <em>running</em>. You now wait, again, for a core.</p>
+      </div>
+
+      <div class="section" id="ch4-s1">
+        <h3>4.2 &nbsp;Where the overshoot comes from</h3>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 470 180" xmlns="http://www.w3.org/2000/svg">
+            <line x1="30" y1="100" x2="440" y2="100" stroke="var(--text-faint)"/>
+            <line x1="60" y1="90" x2="60" y2="110" stroke="var(--accent-take)" stroke-width="2"/>
+            <text x="60" y="126" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--accent-take)">usleep(200000)</text>
+            <text x="60" y="138" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text-faint)">t=0</text>
+            <line x1="280" y1="90" x2="280" y2="110" stroke="var(--accent-debug)" stroke-width="2"/>
+            <text x="280" y="126" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--accent-debug)">timer fires</text>
+            <text x="280" y="138" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text-faint)">t=200.0ms</text>
+            <line x1="370" y1="90" x2="370" y2="110" stroke="var(--accent-compile)" stroke-width="2"/>
+            <text x="380" y="126" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--accent-compile)">actually runs</text>
+            <text x="380" y="138" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text-faint)">t=200.4ms</text>
+            <rect x="60" y="70" width="220" height="14" fill="rgba(94,230,255,0.15)" stroke="var(--accent-take)"/>
+            <text x="170" y="81" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text)">sleeping (guaranteed ≥ 200ms)</text>
+            <rect x="280" y="70" width="90" height="14" fill="rgba(255,84,112,0.15)" stroke="var(--accent-burnout)"/>
+            <text x="325" y="81" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--accent-burnout)">runnable,</text>
+            <text x="325" y="60" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--accent-burnout)">waiting for a core</text>
+            <text x="235" y="168" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text-dim)">The overshoot is scheduler latency — not a timer inaccuracy.</text>
+          </svg>
+          <div class="diagram-caption">Timer fires on time. Your thread runs later. The gap is where the imprecision lives.</div>
+        </div>
+        <p>Contributing factors, roughly in order of typical magnitude:</p>
+        <ul>
+          <li><strong>Scheduler latency</strong> — other runnable threads are ahead of you; you wait for a core (Chapter 5).</li>
+          <li><strong>Timer granularity</strong> — sub-millisecond on modern hrtimers; usually the smallest term.</li>
+          <li><strong>Wakeup + context switch cost</strong> — microseconds.</li>
+          <li><strong>System load</strong> — under heavy contention, the wait for a core dominates everything else.</li>
+        </ul>
+      </div>
+
+      <div class="section" id="ch4-s2">
+        <h3>4.3 &nbsp;The pattern for accurate durations</h3>
+        <p>Because sleeps overshoot, computing your next deadline by adding to <em>now</em> accumulates drift:</p>
+        <pre><code>// DRIFTS — each overshoot compounds into the next cycle
+while (running) {
+    usleep(200000);
+    do_thing();          // by cycle 50, you're tens of ms late
+}
+
+// CORRECT — deadlines computed from a fixed origin, drift doesn't accumulate
+long next = start_ms + 200;
+while (running) {
+    long now = now_ms();
+    if (now &lt; next) usleep((next - now) * 1000);
+    do_thing();
+    next += 200;         // absolute schedule, immune to per-sleep overshoot
+}</code></pre>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        Your coder simulates compiling with <code>usleep(time_to_compile * 1000)</code>. A few hundred microseconds of overshoot per phase is fine — the evaluation scale explicitly allows "a small timing tolerance" and asks evaluators to "discuss borderline cases honestly." But <em>burnout deadlines must be computed from <code>last_compile_start</code> as an absolute point</em>, exactly as the subject defines them (<code>last_compile_start + time_to_burnout</code>), never by accumulating sleep durations. The subject's own formula is telling you to use the absolute pattern.</div>
+        <div id="ch4-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 4 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>What exactly does usleep(200000) guarantee? What does it not guarantee?</li>
+          <li>Explain why computing each deadline as "now + interval" drifts, while "origin + N × interval" does not.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">Predict the output</div><ol>
+          <li>A coder loops 50 times with usleep(200000), each overshooting by ~300µs. How far behind schedule is it by the last iteration under the naive pattern? Under the absolute-deadline pattern?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 5 ============ -->
+    <section class="chapter" id="ch5">
+      <div class="chapter-label">Chapter 05</div>
+      <h2>Scheduler latency</h2>
+
+      <div class="section" id="ch5-s0">
+        <h3>5.1 &nbsp;The gap between runnable and running</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        <strong>Scheduler latency</strong> is the delay between a thread becoming <em>runnable</em> and it actually <em>running</em> on a core. It is not a bug or a defect — it is the unavoidable consequence of having more runnable threads than cores. It's also the single largest source of timing imprecision in Codexion, and the reason the subject writes "allow a minimal tolerance when testing."</div>
+        <p>On an idle machine, latency is microseconds. Under load — say, 200 coder threads all becoming runnable when a dongle frees — it can be milliseconds. That range spans Codexion's entire 10ms budget.</p>
+      </div>
+
+      <div class="section" id="ch5-s1">
+        <h3>5.2 &nbsp;What makes it worse</h3>
+        <table>
+          <tr><th>Factor</th><th>Effect</th></tr>
+          <tr><td>More runnable threads than cores</td><td>Directly increases queueing delay</td></tr>
+          <tr><td>Thundering herd (Course 6)</td><td>N threads become runnable at once; N−1 waste their turn re-checking and sleeping</td></tr>
+          <tr><td>Other system load</td><td>Your threads compete with everything else on the machine</td></tr>
+          <tr><td>Running under Valgrind</td><td>10–50× slowdown; timings become meaningless</td></tr>
+        </table>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — a real trap</span>
+        Running <code>valgrind --tool=helgrind ./codexion 5 500 200 200 200 10 0 fifo</code> will produce burnouts at wildly wrong times, or burnouts in configurations that should be feasible. That is <em>expected</em> and not a bug in your code — Valgrind serializes threads onto a single virtual core and slows everything by an order of magnitude. Use Helgrind to check for races and lock-order violations; use a native build to check timing. Never judge one with the other. Say this at defense if the evaluator runs Helgrind and points at the timestamps.</div>
+      </div>
+
+      <div class="section" id="ch5-s2">
+        <h3>5.3 &nbsp;Designing around it</h3>
+        <ul>
+          <li><strong>Don't fight it.</strong> You cannot make CFS give you a core faster. Accept a tolerance and design so a few hundred microseconds don't matter.</li>
+          <li><strong>Reduce runnable threads.</strong> Blocked threads don't compete. This is another argument for condition variables over polling (Course 6) — a polling coder is runnable and in the way; a blocked one isn't.</li>
+          <li><strong>Prefer signal over broadcast</strong> where correct, to avoid manufacturing your own thundering herd.</li>
+          <li><strong>Never hold a mutex while sleeping unnecessarily</strong> — the deliberate dongle-possession case (Course 5) excepted.</li>
+        </ul>
+        <div class="why-box"><span class="tag">What "real-time" would require</span>
+        Genuine bounded latency needs <code>SCHED_FIFO</code>/<code>SCHED_DEADLINE</code>, usually a PREEMPT_RT kernel, and often CPU isolation. None of that is available to you here — <code>sched_setscheduler</code> isn't in the allowed function list, and the subject doesn't ask for it. Codexion is a <em>soft</em> real-time exercise: it wants you to understand deadlines and build a deadline-aware scheduler, while acknowledging in its own text that the underlying OS gives no hard guarantee.</div>
+        <div id="ch5-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 5 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Define scheduler latency precisely. Why is it not a bug?</li>
+          <li>Why does using condition variables instead of polling reduce scheduler latency for everyone, not just the waiting thread?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Under Helgrind your coders burn out at the wrong times." Explain why, and what the correct testing methodology is.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 6 ============ -->
+    <section class="chapter" id="ch6">
+      <div class="chapter-label">Chapter 06</div>
+      <h2>Burnout detection</h2>
+
+      <div class="section" id="ch6-s0">
+        <h3>6.1 &nbsp;What the subject demands</h3>
+        <p>Three requirements, from the subject and the evaluation scale:</p>
+        <ul>
+          <li>A coder burns out if it hasn't <em>started compiling</em> within <code>time_to_burnout</code> ms of its last compile start (or of the simulation start).</li>
+          <li>"A separate <strong>monitor</strong> thread must detect burnout precisely and stop the simulation."</li>
+          <li>The burnout log must appear within <strong>10ms</strong> of the actual burnout time — and per the scale, it must be the <strong>last</strong> line printed.</li>
+        </ul>
+        <p>So each coder's deadline is <code>last_compile_start + time_to_burnout</code> — the same value <code>edf</code> uses as its priority key. One field, two purposes.</p>
+      </div>
+
+      <div class="section" id="ch6-s1">
+        <h3>6.2 &nbsp;Three monitor designs</h3>
+        <table>
+          <tr><th>Design</th><th>Precision</th><th>Cost</th><th>Verdict</th></tr>
+          <tr><td><strong>Busy-spin</strong> — loop reading the clock, never sleep</td><td>Excellent (µs)</td><td>Burns an entire core continuously</td><td>Wasteful; steals a core from the coders and worsens their latency</td></tr>
+          <tr><td><strong>Fixed poll</strong> — <code>usleep(1000)</code>, check all coders, repeat</td><td>~1ms + latency — well inside budget</td><td>~1000 cheap wakeups/sec</td><td>Simple, robust, entirely sufficient</td></tr>
+          <tr><td><strong>Deadline-driven</strong> — <code>cond_timedwait</code> until the earliest deadline</td><td>Excellent</td><td>Minimal — wakes only when needed</td><td>Elegant; needs care when deadlines change under you</td></tr>
+        </table>
+        <div class="why-box"><span class="tag">Why the middle option is usually right</span>
+        A 1ms poll gives you a 1ms detection granularity plus scheduler latency — comfortably inside 10ms even under load — and reading the clock is nearly free thanks to the vDSO (Chapter 1). The deadline-driven design is more sophisticated but introduces a real subtlety: a coder starting a compile <em>changes</em> its deadline, so your monitor's sleep target may become stale and must be re-signalled. Choose either, but choose it deliberately and be able to say why.</div>
+      </div>
+
+      <div class="section" id="ch6-s2">
+        <h3>6.3 &nbsp;The shape of a correct monitor</h3>
+        <pre><code>void *monitor(void *arg) {
+    sim_t *sim = arg;
+    while (1) {
+        pthread_mutex_lock(&amp;sim-&gt;mtx);
+
+        // 1. Did everyone finish? (checked under the same lock)
+        if (sim-&gt;coders_done == sim-&gt;n) { sim-&gt;stop = 1; pthread_cond_broadcast(&amp;sim-&gt;cv);
+            pthread_mutex_unlock(&amp;sim-&gt;mtx); break; }
+
+        // 2. Has anyone burned out?
+        long now = now_ms();
+        for (int i = 0; i &lt; sim-&gt;n; i++) {
+            if (now &gt;= sim-&gt;coders[i].last_compile_start + sim-&gt;time_to_burnout) {
+                sim-&gt;stop = 1;                    // set BEFORE printing
+                log_burnout(sim, i, now);         // last line, under the log mutex
+                pthread_cond_broadcast(&amp;sim-&gt;cv); // wake every sleeper so join() works
+                pthread_mutex_unlock(&amp;sim-&gt;mtx);
+                return NULL;
+            }
+        }
+        pthread_mutex_unlock(&amp;sim-&gt;mtx);
+        usleep(1000);                              // sleep OUTSIDE the lock
+    }
+    return NULL;
+}</code></pre>
+        <p>Four details carry the correctness:</p>
+        <ul>
+          <li><strong>Reads are under the mutex.</strong> <code>last_compile_start</code> is written by coder threads; reading it unlocked is a data race Helgrind will find (Course 9).</li>
+          <li><strong>The sleep is outside the mutex.</strong> Sleeping while holding the lock would block every coder for 1ms out of every 1ms.</li>
+          <li><strong>Stop is set before the burnout line is printed</strong>, and coders check <code>stop</code> before printing — that's what makes burnout the last line.</li>
+          <li><strong>Broadcast, not signal.</strong> Every blocked coder must wake to observe <code>stop</code>, or <code>pthread_join</code> hangs (Course 6, Chapter 3).</li>
+        </ul>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — the ordering is the exam</span>
+        The infeasible benchmark (<code>./codexion 5 500 200 200 200 10 0 fifo</code>) exists to test exactly this. Burnout is guaranteed; what's being graded is whether your burnout line lands within 10ms and whether anything prints after it. Set the flag, print, broadcast, in that order, all under the lock — and have every coder check <code>stop</code> before every log line. Course 10 builds the full architecture.</div>
+        <div id="ch6-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 6 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Debugging exercise</div><ol>
+          <li>Your monitor calls <code>usleep(1000)</code> while holding the simulation mutex. Describe what every coder thread experiences.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why must the stop flag be set before printing the burnout line, and why must coders check it before every log line?</li>
+          <li>Explain why the monitor's deadline field is the same value the edf scheduler uses as its key.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"How do you guarantee the burnout line appears within 10ms?" Walk through your monitor's poll interval, the scheduler latency you're budgeting for, and why the total stays inside the requirement.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    </div><!-- /chapters-root -->
+
+  </main>
+</div>
+
+<script>
+/* ================= THEME ================= */
+function toggleTheme(){
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  document.getElementById('theme-toggle').textContent = isLight ? '☀ light mode' : '🌙 dark mode';
+}
+
+/* ================= PROGRESS BAR ================= */
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+});
+
+/* ================= HERO DIAGRAM (SVG, generated) ================= */
+(function(){
+  const N = 5, R = 110, cx=180, cy=150;
+  let coders = [], dongles = [];
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + i*(2*Math.PI/N);
+    coders.push({x: cx+R*Math.cos(a), y: cy+R*Math.sin(a), n:i+1});
+  }
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + (i+0.5)*(2*Math.PI/N);
+    dongles.push({x: cx+ (R-38)*Math.cos(a), y: cy+(R-38)*Math.sin(a)});
+  }
+  let svg = `<svg viewBox="0 0 360 320" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<circle cx="${cx}" cy="${cy}" r="34" fill="none" stroke="var(--accent-compile)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  svg += `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">QUANTUM</text>`;
+  svg += `<text x="${cx}" y="${cy+9}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">COMPILER</text>`;
+  dongles.forEach((d,i) => {
+    svg += `<rect x="${d.x-9}" y="${d.y-6}" width="18" height="12" rx="2" fill="var(--accent-take)" opacity="0.85"/>`;
+  });
+  coders.forEach(c => {
+    svg += `<circle cx="${c.x}" cy="${c.y}" r="20" fill="var(--bg-elev)" stroke="var(--accent-refactor)" stroke-width="2"/>`;
+    svg += `<text x="${c.x}" y="${c.y+4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" fill="var(--text)">${c.n}</text>`;
+  });
+  svg += `</svg>`;
+  document.getElementById('hero-diagram').innerHTML = svg;
+})();
+
+/* ================= QUIZ ENGINE ================= */
+function renderQuiz(container, q){
+  const div = document.createElement('div');
+  div.className = 'quiz';
+  div.innerHTML = `<div class="q-title">Check yourself</div><div class="q-text">${q.q}</div><div class="opts"></div><div class="feedback"></div>`;
+  const opts = div.querySelector('.opts');
+  q.options.forEach((opt, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.textContent = opt;
+    btn.onclick = () => {
+      const fb = div.querySelector('.feedback');
+      [...opts.children].forEach(b => b.disabled = true);
+      if(idx === q.correct){
+        btn.classList.add('correct');
+      } else {
+        btn.classList.add('wrong');
+        opts.children[q.correct].classList.add('correct');
+      }
+      fb.textContent = q.explain;
+      fb.classList.add('show');
+    };
+    opts.appendChild(btn);
+  });
+  container.appendChild(div);
+}
+</script>
+
+<script>
+/* ================= SIDEBAR NAV ================= */
+const chapterMeta = [
+  {n:1, title:"Clocks: gettimeofday & clock_gettime", sections:["Where the time comes from","The two APIs","The vDSO"]},
+  {n:2, title:"Monotonic vs. realtime", sections:["Wall-clock can move backwards","The rule","What the subject allows"]},
+  {n:3, title:"Timer interrupts & hrtimers", sections:["How the kernel regains control","Periodic ticks to tickless","What this bounds"]},
+  {n:4, title:"usleep() and inexact sleep", sections:["What usleep promises","Where overshoot comes from","The pattern for accurate durations"]},
+  {n:5, title:"Scheduler latency", sections:["Runnable vs. running","What makes it worse","Designing around it"]},
+  {n:6, title:"Burnout detection", sections:["What the subject demands","Three monitor designs","The shape of a correct monitor"]},
+];
+const navList = document.getElementById('nav-list');
+chapterMeta.forEach(ch => {
+  const wrap = document.createElement('div');
+  wrap.className = 'nav-chapter';
+  const head = document.createElement('div');
+  head.className = 'nav-chapter-head';
+  head.innerHTML = `<span class="num">${String(ch.n).padStart(2,'0')}</span><span>${ch.title}</span><span class="arrow">›</span>`;
+  head.onclick = () => wrap.classList.toggle('open');
+  wrap.appendChild(head);
+  const secs = document.createElement('div');
+  secs.className = 'nav-sections';
+  ch.sections.forEach((s,i) => {
+    const a = document.createElement('a');
+    a.href = `#ch${ch.n}-s${i}`;
+    a.textContent = s;
+    secs.appendChild(a);
+  });
+  wrap.appendChild(secs);
+  navList.appendChild(wrap);
+});
+// open chapter 1 by default
+navList.querySelector('.nav-chapter').classList.add('open');
+
+/* ================= QUIZ DATA ================= */
+renderQuiz(document.getElementById('ch1-quiz1'), {
+  q: "Your monitor thread reads the clock roughly 1000 times per second. Is that expensive?",
+  options: [
+    "Yes — each read is a syscall costing hundreds of nanoseconds plus a mode switch.",
+    "No — the vDSO maps the kernel's timekeeping data and code into your process, so clock_gettime typically executes entirely in userspace with no syscall at all, in tens of nanoseconds.",
+    "Yes — reading the clock requires taking a kernel-wide lock.",
+    "It depends entirely on how many other threads exist."
+  ],
+  correct: 1,
+  explain: "Correct. Reading the clock is one of the cheapest operations available. Your monitor's real cost is how often it sleeps and wakes, not how often it asks the time."
+});
+renderQuiz(document.getElementById('ch2-quiz1'), {
+  q: "Why is CLOCK_MONOTONIC the correct choice for measuring an interval, and CLOCK_REALTIME the wrong one?",
+  options: [
+    "MONOTONIC has higher resolution than REALTIME.",
+    "REALTIME tracks wall-clock time and can jump forward OR BACKWARD at any moment (NTP, admin changes, VM restore) — so subtracting two readings can produce a negative or wildly wrong duration. MONOTONIC only ever moves forward.",
+    "REALTIME requires root privileges to read.",
+    "MONOTONIC is comparable across machines, which intervals require."
+  ],
+  correct: 1,
+  explain: "Right — and MONOTONIC is specifically NOT comparable across machines, which is fine because intervals are local. The rule: REALTIME for a point in the world, MONOTONIC for an interval."
+});
+renderQuiz(document.getElementById('ch3-quiz1'), {
+  q: "How does the kernel preempt a thread that's running and never voluntarily yields?",
+  options: [
+    "The kernel polls a flag in the thread's task_struct between instructions.",
+    "It can't do it in software — a hardware timer interrupt fires and forcibly transfers control to the kernel's handler, regardless of what the running thread was doing.",
+    "The compiler inserts yield points into every loop automatically.",
+    "Other threads send it a POSIX signal asking it to stop."
+  ],
+  correct: 1,
+  explain: "Correct. A running thread has the CPU; only an external hardware interrupt can take it back. Every preemption, every expiring usleep, rides on this."
+});
+renderQuiz(document.getElementById('ch4-quiz1'), {
+  q: "What does usleep(200000) actually guarantee?",
+  options: [
+    "That the thread resumes in exactly 200ms, ±10 microseconds.",
+    "That the thread sleeps for AT LEAST 200ms — there is a lower bound and no upper bound; the timer fires on time but the thread then waits again for a core to become available.",
+    "That the thread resumes within one scheduler tick of 200ms, guaranteed.",
+    "That the thread will not be preempted during the 200ms."
+  ],
+  correct: 1,
+  explain: "Right. The overshoot isn't timer inaccuracy — it's scheduler latency between becoming runnable and actually running. Sleep has a floor, never a ceiling."
+});
+renderQuiz(document.getElementById('ch5-quiz1'), {
+  q: "Running your program under Helgrind, coders burn out at times that make no sense. What's going on?",
+  options: [
+    "You have a genuine timing bug that only Helgrind's instrumentation reveals.",
+    "Valgrind serializes threads onto one virtual core and slows execution 10–50×, so timing measurements under it are meaningless — use Helgrind to check races and lock ordering, and a native build to check timing. Never judge one with the other.",
+    "Helgrind has detected a data race and is deliberately delaying threads to prove it.",
+    "Your monitor thread's poll interval is too short for Helgrind to keep up."
+  ],
+  correct: 1,
+  explain: "Correct — and this is worth saying at defense if an evaluator runs Helgrind and points at the timestamps. Race detection and timing verification are separate tests requiring separate builds."
+});
+renderQuiz(document.getElementById('ch6-quiz1'), {
+  q: "Your monitor thread calls usleep(1000) while holding the simulation mutex. What happens?",
+  options: [
+    "Nothing bad — usleep releases held mutexes automatically.",
+    "Every coder thread is blocked for that entire millisecond, every millisecond — the monitor holds the lock ~100% of the time, so coders can barely ever acquire it. The sleep must be outside the critical section.",
+    "The monitor deadlocks with itself.",
+    "The kernel detects this and forcibly releases the mutex after 1ms."
+  ],
+  correct: 1,
+  explain: "Right. Lock, check, unlock, THEN sleep. Sleeping under the lock throttles every other thread in the program to the monitor's poll rate."
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codexion Course 1: How Programs Become Running Threads</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f14; --bg-elev:#12151c; --bg-card:#171b24; --border:#252b38;
+  --text:#e7e9ee; --text-dim:#9aa3b5; --text-faint:#5c6478;
+  --accent-take:#5ee6ff;   /* has taken a dongle */
+  --accent-compile:#4f8cff; /* compiling */
+  --accent-debug:#ffb454;   /* debugging */
+  --accent-refactor:#b98eff;/* refactoring */
+  --accent-burnout:#ff5470; /* burned out */
+  --mono:'IBM Plex Mono', monospace;
+  --sans:'Inter', sans-serif;
+  --radius:10px;
+}
+html[data-theme="light"]{
+  --bg:#f5f6f8; --bg-elev:#ffffff; --bg-card:#ffffff; --border:#dde1e8;
+  --text:#191c22; --text-dim:#565f70; --text-faint:#8890a0;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  line-height:1.65; font-size:16px; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent-compile);}
+code, .mono{font-family:var(--mono);}
+
+/* ---------- Progress bar ---------- */
+#progress-bar{position:fixed; top:0; left:0; height:3px; background:linear-gradient(90deg,var(--accent-take),var(--accent-compile),var(--accent-debug),var(--accent-refactor)); width:0%; z-index:1000; transition:width .1s linear;}
+
+/* ---------- Layout ---------- */
+#app{display:flex; min-height:100vh;}
+#sidebar{
+  width:300px; flex-shrink:0; background:var(--bg-elev); border-right:1px solid var(--border);
+  position:sticky; top:0; height:100vh; overflow-y:auto; padding:20px 0 60px;
+}
+#sidebar .brand{padding:0 20px 16px; border-bottom:1px solid var(--border); margin-bottom:12px;}
+#sidebar .brand-title{font-family:var(--mono); font-weight:700; font-size:1.05rem; letter-spacing:.02em;}
+#sidebar .brand-sub{color:var(--text-faint); font-size:.78rem; margin-top:4px;}
+#theme-toggle{
+  margin-top:12px; background:var(--bg-card); border:1px solid var(--border); color:var(--text);
+  padding:6px 12px; border-radius:20px; font-size:.75rem; cursor:pointer; font-family:var(--mono);
+}
+.nav-chapter{border-bottom:1px solid var(--border);}
+.nav-chapter-head{
+  display:flex; align-items:center; gap:10px; padding:10px 20px; cursor:pointer; user-select:none;
+  font-size:.86rem; color:var(--text-dim); transition:color .15s;
+}
+.nav-chapter-head:hover{color:var(--text);}
+.nav-chapter-head .num{font-family:var(--mono); color:var(--text-faint); font-size:.75rem; width:20px; flex-shrink:0;}
+.nav-chapter-head .arrow{margin-left:auto; transition:transform .2s; font-size:.7rem; color:var(--text-faint);}
+.nav-chapter.open .arrow{transform:rotate(90deg);}
+.nav-sections{max-height:0; overflow:hidden; transition:max-height .25s ease;}
+.nav-chapter.open .nav-sections{max-height:500px;}
+.nav-sections a{
+  display:block; padding:6px 20px 6px 50px; font-size:.8rem; color:var(--text-faint);
+  text-decoration:none; border-left:2px solid transparent;
+}
+.nav-sections a:hover, .nav-sections a.active{color:var(--accent-compile); border-left-color:var(--accent-compile);}
+
+#main{flex:1; min-width:0; max-width:900px; margin:0 auto; padding:60px 48px 160px;}
+
+/* ---------- Hero ---------- */
+.hero{padding:20px 0 50px; border-bottom:1px solid var(--border); margin-bottom:50px;}
+.hero-eyebrow{font-family:var(--mono); font-size:.78rem; color:var(--accent-take); letter-spacing:.08em; text-transform:uppercase; margin-bottom:14px;}
+.hero h1{font-family:var(--mono); font-size:2.4rem; font-weight:700; line-height:1.15; margin-bottom:16px;}
+.hero p.lead{color:var(--text-dim); font-size:1.08rem; max-width:640px; margin-bottom:32px;}
+.legend{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:36px;}
+.legend .chip{
+  display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:.76rem;
+  padding:6px 12px; border-radius:20px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-dim);
+}
+.legend .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+
+/* ---------- Chapter content ---------- */
+.chapter{margin-bottom:90px; scroll-margin-top:20px;}
+.chapter-label{font-family:var(--mono); color:var(--text-faint); font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px;}
+.chapter h2{font-family:var(--mono); font-size:1.9rem; margin-bottom:26px; padding-bottom:16px; border-bottom:1px solid var(--border);}
+.section{scroll-margin-top:20px; margin-bottom:44px;}
+.section h3{font-size:1.25rem; margin-bottom:14px; font-weight:700;}
+.section h4{font-size:1.02rem; margin:20px 0 10px; font-weight:700; color:var(--text-dim);}
+.section p{margin-bottom:14px; max-width:70ch;}
+.section ul, .section ol{margin:0 0 14px 22px;}
+.section li{margin-bottom:6px;}
+
+.why-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-take);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.why-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-take); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.codexion-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-refactor);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.codexion-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-refactor); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.analogy-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-debug);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.analogy-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+pre{
+  background:#08090c; border:1px solid var(--border); border-radius:8px; padding:16px 18px;
+  overflow-x:auto; margin:16px 0; font-size:.86rem; line-height:1.55;
+}
+html[data-theme="light"] pre{background:#f0f1f4;}
+pre code{font-family:var(--mono); color:#c8ccd8;}
+html[data-theme="light"] pre code{color:#2b2f3a;}
+.log-line{display:block;}
+.log-ts{color:var(--text-faint);}
+.log-take{color:var(--accent-take);}
+.log-compile{color:var(--accent-compile);}
+.log-debug{color:var(--accent-debug);}
+.log-refactor{color:var(--accent-refactor);}
+.log-burnout{color:var(--accent-burnout); font-weight:600;}
+
+.expandable{border:1px solid var(--border); border-radius:8px; margin:16px 0; overflow:hidden;}
+.expandable summary{
+  padding:13px 18px; cursor:pointer; font-weight:600; font-size:.92rem; background:var(--bg-card);
+  list-style:none; display:flex; align-items:center; gap:10px;
+}
+.expandable summary::-webkit-details-marker{display:none;}
+.expandable summary::before{content:'+'; font-family:var(--mono); color:var(--accent-compile); font-weight:700;}
+.expandable[open] summary::before{content:'−';}
+.expandable .body{padding:16px 18px; border-top:1px solid var(--border);}
+
+svg{max-width:100%; height:auto;}
+.diagram-wrap{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:24px; margin:20px 0; text-align:center;}
+.diagram-caption{font-size:.82rem; color:var(--text-faint); margin-top:10px; font-family:var(--mono);}
+
+/* ---------- Quiz ---------- */
+.quiz{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:22px 24px; margin:20px 0;}
+.quiz .q-title{font-family:var(--mono); font-size:.75rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px;}
+.quiz .q-text{font-weight:600; margin-bottom:14px;}
+.quiz .opts{display:flex; flex-direction:column; gap:8px;}
+.quiz button.opt{
+  text-align:left; padding:11px 14px; background:var(--bg-elev); border:1px solid var(--border); border-radius:7px;
+  color:var(--text); cursor:pointer; font-family:var(--sans); font-size:.92rem; transition:.15s;
+}
+.quiz button.opt:hover{border-color:var(--accent-compile);}
+.quiz button.opt.correct{border-color:#3ecf8e; background:rgba(62,207,142,.12);}
+.quiz button.opt.wrong{border-color:var(--accent-burnout); background:rgba(255,84,112,.12);}
+.quiz .feedback{margin-top:12px; font-size:.88rem; color:var(--text-dim); display:none;}
+.quiz .feedback.show{display:block;}
+
+/* ---------- Exercises ---------- */
+.exercises{background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:24px 26px; margin-top:30px;}
+.exercises h4{font-family:var(--mono); font-size:.8rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;}
+.ex-group{margin-top:16px;}
+.ex-group .ex-label{font-size:.78rem; color:var(--accent-take); font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;}
+.ex-group ol{margin-left:20px;}
+.ex-group li{margin-bottom:8px; color:var(--text-dim); font-size:.94rem;}
+
+table{width:100%; border-collapse:collapse; margin:16px 0; font-size:.9rem;}
+th,td{border:1px solid var(--border); padding:8px 12px; text-align:left;}
+th{background:var(--bg-card); font-family:var(--mono); font-size:.78rem; text-transform:uppercase;}
+
+.nav-footer{display:flex; justify-content:space-between; margin-top:60px; padding-top:24px; border-top:1px solid var(--border);}
+.nav-footer a{font-family:var(--mono); font-size:.85rem; text-decoration:none; color:var(--text-dim); display:flex; flex-direction:column;}
+.nav-footer a:hover{color:var(--accent-compile);}
+.nav-footer .lbl{font-size:.7rem; color:var(--text-faint); text-transform:uppercase; margin-bottom:4px;}
+
+@media (max-width:860px){
+  #sidebar{position:fixed; left:-300px; z-index:900; transition:left .2s; box-shadow:0 0 40px rgba(0,0,0,.4);}
+  #sidebar.open{left:0;}
+  #main{padding:60px 20px 120px; max-width:100%;}
+  #menu-btn{display:flex !important;}
+}
+#menu-btn{
+  display:none; position:fixed; top:16px; left:16px; z-index:950; width:40px; height:40px;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:8px; color:var(--text);
+  align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem;
+}
+</style>
+</head>
+<body>
+<div id="progress-bar"></div>
+<div id="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</div>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="brand">
+      <div class="brand-title">// codexion — course 1</div>
+      <div class="brand-sub">How programs become running threads</div>
+      <button id="theme-toggle" onclick="toggleTheme()">☀ light mode</button>
+    </div>
+    <div id="nav-list"></div>
+  </nav>
+
+  <main id="main">
+
+    <section class="hero">
+      <div class="hero-eyebrow">Course 1 of the Codexion series</div>
+      <h1>How programs become running threads</h1>
+      <p class="lead">Before touching mutexes or schedulers, you need the ground floor: what your <code>.c</code> files actually turn into, what an executable file really contains, what happens the instant you run it, and why the OS gives you processes and threads instead of one flat pile of shared memory. This course walks the whole pipeline — source code → ELF → process → address space → thread — so that every later idea about compiling, debugging, and refactoring coders has solid ground underneath it.</p>
+      <div class="legend">
+        <div class="chip"><span class="dot" style="background:var(--accent-take)"></span> has taken a dongle</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-compile)"></span> compiling</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-debug)"></span> debugging</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-refactor)"></span> refactoring</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-burnout)"></span> burned out</div>
+      </div>
+      <div class="diagram-wrap" id="hero-diagram"></div>
+      <div class="diagram-caption">The Codexion hub: N coders in a circle, N dongles between them, one shared Quantum Compiler in the center.</div>
+    </section>
+
+    <div id="chapters-root">
+
+    <!-- ============ CHAPTER 1 ============ -->
+    <section class="chapter" id="ch1">
+      <div class="chapter-label">Chapter 01</div>
+      <h2>From source code to executable</h2>
+
+      <div class="section" id="ch1-s0">
+        <h3>1.1 &nbsp;Preprocessing</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Before <code>gcc</code>/<code>cc</code> can understand your C code as C code, it needs your file to contain nothing but pure C — no <code>#include</code>s pointing at other files, no <code>#define</code> macros still unexpanded, no conditional <code>#ifdef</code> blocks left undecided. The <strong>preprocessor</strong> is a dumb, mechanical text-substitution pass that resolves all of that first, so the real compiler only ever has to deal with one self-contained blob of C.</div>
+        <p>Run it yourself on a Codexion source file and you'll see exactly what the compiler sees:</p>
+        <pre><code>cc -E codexion.c -o codexion.i</code></pre>
+        <p>Every <code>#include &lt;pthread.h&gt;</code> is replaced, literally, by the entire contents of <code>pthread.h</code> (recursively — <code>pthread.h</code> itself includes other headers). Every macro is expanded. The result, <code>codexion.i</code>, is often tens of thousands of lines for a file that started at a few hundred — almost all of it declarations pulled in from system headers your code needs but didn't write.</p>
+      </div>
+
+      <div class="section" id="ch1-s1">
+        <h3>1.2 &nbsp;Compiling to assembly</h3>
+        <p>The compiler proper takes that preprocessed C and translates it into <strong>assembly</strong> — human-readable-ish mnemonics for the target CPU's instruction set (x86-64 <code>mov</code>, <code>call</code>, <code>lock cmpxchg</code>, etc.), plus symbolic labels for functions and jumps that haven't been resolved to final addresses yet.</p>
+        <pre><code>cc -S codexion.i -o codexion.s</code></pre>
+        <p>This is the stage where high-level constructs disappear into their machine-level reality. A call to <code>pthread_mutex_lock(&amp;dongle-&gt;mtx)</code> becomes a sequence of instructions loading the address into a register and issuing a <code>call</code> instruction to a symbol named something like <code>pthread_mutex_lock@PLT</code> — the actual atomic CAS logic (Volume 2, Chapter 4) lives inside glibc's own compiled code, not yours.</p>
+        <div class="why-box"><span class="tag">Why keep this as a separate stage</span>
+        Separating "understand the language" (compiling) from "encode as machine bytes" (assembling, next) lets the same compiler front-end target wildly different CPU architectures just by swapping which assembly dialect it emits — and lets you, the programmer, inspect exactly what your C turned into before it becomes opaque binary.</div>
+      </div>
+
+      <div class="section" id="ch1-s2">
+        <h3>1.3 &nbsp;Assembling to object code</h3>
+        <p>The <strong>assembler</strong> translates human-readable assembly into actual machine code bytes, bundled into an <strong>object file</strong> (<code>.o</code>) — but critically, <em>not yet a runnable program</em>. An object file contains machine code with placeholder addresses for anything it doesn't yet know the final location of: calls to functions defined in other files (like <code>pthread_create</code>, which lives in libpthread/glibc, not your file), and references to global data.</p>
+        <pre><code>cc -c codexion.s -o codexion.o
+# equivalently, straight from source:
+cc -c codexion.c -o codexion.o</code></pre>
+        <p>An object file also carries a <strong>symbol table</strong> — a list of names it defines (e.g. <code>coder_routine</code>) and names it needs from elsewhere (e.g. <code>pthread_mutex_lock</code>) — which is exactly what the next stage consumes.</p>
+      </div>
+
+      <div class="section" id="ch1-s3">
+        <h3>1.4 &nbsp;Linking</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Your Codexion program is never really "just your code." It's your <code>.o</code> files plus code from the C standard library (<code>printf</code>, <code>malloc</code>, <code>atoi</code>) plus code from the pthread library (<code>pthread_create</code>, <code>pthread_mutex_lock</code>). Each of those lives in a separately compiled object file or library. The <strong>linker</strong>'s entire job is to stitch all of these together into one coherent executable, resolving every "I need this symbol from somewhere else" reference into a real, final memory address.</div>
+        <pre><code>cc codexion.o -o codexion -pthread
+# Makefile's $(NAME) rule is exactly this final linking step</code></pre>
+        <p>Two flavors of linking matter here:</p>
+        <ul>
+          <li><strong>Static linking</strong> — the library's actual machine code is copied directly into your final executable. Bigger binary, no runtime dependency on that library being present on the target machine.</li>
+          <li><strong>Dynamic linking</strong> — your executable just records "I need <code>libpthread.so</code> at runtime," and the actual code is loaded and connected when you run the program (by the dynamic linker/loader, <code>ld.so</code>). Smaller binary, but requires the shared library to be installed wherever you run it.</li>
+        </ul>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is exactly why your Makefile's compile flags matter: <code>-Wall -Wextra -Werror -pthread</code> — that trailing <code>-pthread</code> isn't decoration. It tells both the compiler (define certain preprocessor macros, use thread-safe versions of some library functions) and the linker (link against the pthread implementation) that this program genuinely uses threads. Forget it, and functions like <code>pthread_create</code> may fail to link at all, or worse, silently link against non-thread-safe library internals on some systems.</div>
+        <div id="ch1-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 1 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Run <code>cc -E</code> on a small C file that includes <code>&lt;stdio.h&gt;</code> and count how many lines the preprocessed output has versus the original. Explain the difference.</li>
+          <li>Why can a linker error ("undefined reference to pthread_create") happen even though your code compiles with zero warnings under <code>-Wall -Wextra -Werror</code>?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Walk me through every stage between codexion.c and the final codexion binary, and name the tool responsible for each stage." Practice naming: preprocessor, compiler, assembler, linker.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 2 ============ -->
+    <section class="chapter" id="ch2">
+      <div class="chapter-label">Chapter 02</div>
+      <h2>ELF files</h2>
+
+      <div class="section" id="ch2-s0">
+        <h3>2.1 &nbsp;Why a file format at all</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        A finished executable isn't just "a pile of machine code bytes." The kernel needs to know, before running a single instruction: where does the code start? Which bytes are code versus data? What other libraries does this need? Where should each piece be placed in memory? Answering these questions requires a structured file format with a defined header and layout — on Linux, that format is <strong>ELF</strong> (Executable and Linkable Format).</div>
+        <p>ELF isn't only used for final executables — it's the same format for object files (<code>.o</code>), shared libraries (<code>.so</code>), and core dumps. That uniformity is deliberate: the same tools (linkers, loaders, debuggers) can parse all of them with one format's worth of logic.</p>
+      </div>
+
+      <div class="section" id="ch2-s1">
+        <h3>2.2 &nbsp;ELF header &amp; sections</h3>
+        <p>Every ELF file opens with a fixed-size <strong>ELF header</strong> — you can inspect it directly:</p>
+        <pre><code>readelf -h codexion
+# or:
+file codexion</code></pre>
+        <p>Key fields: a magic number (<code>0x7f 'E' 'L' 'F'</code>) identifying the format, whether it's 32/64-bit, the target architecture (x86-64), the <strong>entry point</strong> address (where execution should first jump to — not necessarily <code>main()</code> directly; it's actually a small C runtime startup routine, <code>_start</code>, that sets up the environment and eventually calls your <code>main</code>), and pointers to two different tables describing the rest of the file: the <strong>section header table</strong> and the <strong>program header table</strong>.</p>
+        <p><strong>Sections</strong> (<code>.text</code>, <code>.data</code>, <code>.bss</code>, <code>.symtab</code>, <code>.rodata</code>, and many more) are the <em>linker's</em> view of the file — fine-grained, named regions used while linking and for debugging (<code>objdump -h codexion</code> lists them). They matter for building the binary, but the kernel loading it to run doesn't consult them directly.</p>
+      </div>
+
+      <div class="section" id="ch2-s2">
+        <h3>2.3 &nbsp;Segments: what the loader actually reads</h3>
+        <div class="why-box"><span class="tag">Why segments are different from sections</span>
+        The kernel, at exec time, doesn't care about the linker's fine-grained bookkeeping (dozens of named sections) — it cares about a much coarser question: "which byte ranges of this file get mapped into memory, at what address, with what permissions (readable/writable/executable)?" That coarser view is the <strong>program header table</strong>, describing <strong>segments</strong> — each segment is a contiguous chunk to <code>mmap</code> directly into the new process's address space.</div>
+        <pre><code>readelf -l codexion</code></pre>
+        <table>
+          <tr><th>Segment type</th><th>What it becomes at runtime</th></tr>
+          <tr><td><code>PT_LOAD</code> (read+execute)</td><td>Your compiled code — becomes the <code>.text</code> region, mapped read-only+executable</td></tr>
+          <tr><td><code>PT_LOAD</code> (read+write)</td><td>Initialized globals/statics — becomes <code>.data</code>, mapped read-write</td></tr>
+          <tr><td><code>PT_DYNAMIC</code></td><td>Info the dynamic linker needs: which shared libraries to load (e.g. <code>libpthread.so.0</code>, <code>libc.so.6</code>) and how to resolve symbols against them</td></tr>
+          <tr><td><code>PT_INTERP</code></td><td>The path to the dynamic linker itself (typically <code>/lib64/ld-linux-x86-64.so.2</code>) — the kernel loads <em>this</em> first, and it in turn loads everything your program depends on</td></tr>
+        </table>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is the concrete mechanism behind "linking against pthread": your <code>PT_DYNAMIC</code> segment records that <code>codexion</code> needs the pthread implementation at runtime; <code>PT_INTERP</code> points at the dynamic linker that will actually go find and map it in before your <code>main()</code> ever runs a single instruction. If that shared library isn't present on the grading machine, you get a runtime loader error — not a compile error — which is exactly why the subject cares about a clean, standard build environment.</div>
+        <div id="ch2-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 2 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Run <code>readelf -l</code> on your compiled <code>codexion</code> binary. Identify which segment corresponds to your code and which corresponds to your initialized data.</li>
+          <li>Why does the kernel consult segments (program headers) rather than sections (section headers) when loading a program to run?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"What's the difference between an ELF section and an ELF segment, and which one does the kernel actually use to set up your process's memory?" Be precise about the linker-vs-loader distinction.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 3 ============ -->
+    <section class="chapter" id="ch3">
+      <div class="chapter-label">Chapter 03</div>
+      <h2>Process creation &amp; execve()</h2>
+
+      <div class="section" id="ch3-s0">
+        <h3>3.1 &nbsp;fork() then exec()</h3>
+        <div class="why-box"><span class="tag">Why two separate syscalls</span>
+        You might expect "run this program" to be one syscall: "create a process and load this file into it." Unix instead splits this into two orthogonal operations — <code>fork()</code> (duplicate the current process) and <code>execve()</code> (replace this process's image with a different program) — because that split is dramatically more flexible than a single combined "spawn" call.</div>
+        <p>When you type <code>./codexion 5 2000 200 200 200 10 0 fifo</code> in your shell:</p>
+        <ol>
+          <li>The shell calls <code>fork()</code>. The kernel creates a near-identical copy of the shell process — same memory contents (via copy-on-write, so no wasteful full duplication actually happens), same open file descriptors, same everything — but now as a distinct process with its own PID.</li>
+          <li>In the <em>child</em> copy, the shell calls <code>execve("./codexion", argv, envp)</code>.</li>
+          <li>The <em>parent</em> (the original shell) keeps running, typically calling <code>waitpid()</code> to block until the child finishes — this is how your shell knows when your program has exited and prints a new prompt.</li>
+        </ol>
+        <div class="analogy-box"><span class="tag">Why the split is powerful</span>
+        Because <code>fork()</code> and <code>execve()</code> are separate, the child process can do arbitrary setup <em>between</em> them, before the new program image is loaded — redirecting stdin/stdout to files or pipes (<code>&gt;</code>, <code>|</code> in your shell), changing its working directory, adjusting resource limits — all using the shell's own familiar, already-running code, before handing control to a completely different program. A single combined "spawn" syscall would need to expose parameters for every one of these possible setup steps directly; the Unix split needs none of that.</div>
+      </div>
+
+      <div class="section" id="ch3-s1">
+        <h3>3.2 &nbsp;What execve() actually replaces</h3>
+        <p><code>execve(path, argv, envp)</code> is dramatic: it doesn't create anything new — it <strong>replaces</strong> the calling process's entire program image in place, while keeping the same PID and most process-level bookkeeping (open file descriptors, unless marked close-on-exec; process ID; parent-child relationships). Concretely, the kernel:</p>
+        <ol>
+          <li>Opens and validates the target file (checking the ELF magic number, checking execute permission).</li>
+          <li>Discards the calling process's <em>old</em> address space entirely — every existing mapping, all old heap/stack contents, gone.</li>
+          <li>Reads the new binary's program headers (Chapter 2) and <code>mmap</code>s each <code>PT_LOAD</code> segment at its specified address, creating a brand new address space matching the new program.</li>
+          <li>If <code>PT_INTERP</code> is present, loads the dynamic linker too, which will later resolve the new program's shared library dependencies before <code>main()</code> runs.</li>
+          <li>Sets the CPU's instruction pointer to the new binary's entry point (not <code>main()</code> directly — the C runtime startup code first, which sets up <code>argc</code>/<code>argv</code>/environment and calls constructors before finally calling your <code>main</code>).</li>
+        </ol>
+        <p>This is why "the same PID runs a completely different program" is possible and completely ordinary — <code>execve()</code>'s entire purpose is to swap out everything about <em>what code is running</em> while preserving everything about <em>which process is running it</em>.</p>
+      </div>
+
+      <div class="section" id="ch3-s2">
+        <h3>3.3 &nbsp;Building the initial stack</h3>
+        <p>Part of what <code>execve()</code> sets up is the brand new process's very first stack frame — and this is precisely where your command-line arguments and environment variables get placed, in a layout <code>main(int argc, char **argv, char **envp)</code> is written to expect:</p>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 420 220" xmlns="http://www.w3.org/2000/svg">
+            <rect x="60" y="10" width="260" height="30" fill="none" stroke="var(--accent-take)" stroke-width="1.5"/>
+            <text x="190" y="30" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">argc = 9</text>
+            <rect x="60" y="45" width="260" height="30" fill="none" stroke="var(--accent-compile)" stroke-width="1.5"/>
+            <text x="190" y="65" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">argv[0..8]: "./codexion","5","2000",...,"fifo", NULL</text>
+            <rect x="60" y="80" width="260" height="30" fill="none" stroke="var(--accent-debug)" stroke-width="1.5"/>
+            <text x="190" y="100" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">envp[]: PATH=..., HOME=..., NULL</text>
+            <rect x="60" y="115" width="260" height="30" fill="none" stroke="var(--accent-refactor)" stroke-width="1.5"/>
+            <text x="190" y="135" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">actual string bytes: "./codexion\0" "5\0" ...</text>
+            <text x="190" y="165" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">stack pointer (%rsp) starts here at process entry</text>
+          </svg>
+          <div class="diagram-caption">The kernel builds this layout before jumping to the new binary's entry point — argc/argv arrive "for free."</div>
+        </div>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is the literal, final answer to "how do my 8 command-line arguments become <code>argv[1]</code> through <code>argv[8]</code> inside <code>main()</code>": the kernel, during <code>execve()</code>, copies your typed argument strings onto this newly built stack and sets up the pointer array, before your first line of <code>codexion.c</code> — not even your C runtime's startup code — has executed. Your <code>atoi(argv[1])</code> call for <code>number_of_coders</code> is reading memory the kernel placed there specifically for you.</div>
+        <div id="ch3-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 3 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why does Unix use two separate syscalls (fork, then exec) instead of one combined "run this program" syscall? Give one concrete shell feature this split enables.</li>
+          <li>What specifically survives a call to <code>execve()</code>, and what is completely discarded?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Your program validates argv[8] must be exactly 'fifo' or 'edf'. Trace exactly how that string got into memory before your validation code ever ran." Reference the kernel-built initial stack.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 4 ============ -->
+    <section class="chapter" id="ch4">
+      <div class="chapter-label">Chapter 04</div>
+      <h2>Virtual memory</h2>
+
+      <div class="section" id="ch4-s0">
+        <h3>4.1 &nbsp;The MMU &amp; page tables</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        If every process addressed physical RAM directly, two problems appear immediately: processes could read/corrupt each other's memory (no isolation), and a program would need to know, at compile time, exactly which physical addresses happen to be free on whatever machine it eventually runs on (no portability). Virtual memory solves both by inserting a translation layer between every address your code uses and the physical RAM it actually touches.</div>
+        <p>The <strong>Memory Management Unit (MMU)</strong>, a piece of CPU hardware, translates every virtual address your process generates into a physical address, consulting <strong>page tables</strong> the kernel maintains per-process. Memory is managed in fixed-size chunks called <strong>pages</strong> (commonly 4KB on x86-64); a page table is essentially a lookup structure mapping virtual page numbers to physical page frame numbers, plus permission bits (readable? writable? executable?).</p>
+      </div>
+
+      <div class="section" id="ch4-s1">
+        <h3>4.2 &nbsp;Why every address is a lie</h3>
+        <p>Every pointer value your Codexion code ever sees — the address <code>malloc()</code> returns for your dongle array, the address of a local variable on a coder thread's stack, a function pointer to <code>coder_routine</code> — is a <strong>virtual</strong> address. It has no fixed relationship to any actual RAM chip location; that relationship is entirely mediated by the current process's page tables, which the kernel can and does change over the process's lifetime (e.g. when new pages are mapped in by <code>malloc</code>/<code>mmap</code>, or swapped to disk and back).</p>
+        <div class="analogy-box"><span class="tag">Analogy — the postal redirect</span>
+        Virtual memory is like a mail redirect service: every letter you send to "123 Main St" (a virtual address) actually gets forwarded, invisibly, to wherever the recipient currently lives (a physical address) — and that forwarding rule is entirely private to you; your neighbor's letters to "123 Main St" get redirected somewhere completely different, because their redirect table (page table) is separate from yours.</div>
+        <p>Two immediate consequences fall out of this for Codexion:</p>
+        <ul>
+          <li><strong>Isolation</strong> — coder thread code in one <code>codexion</code> process instance can never accidentally address another running instance's memory; there's no virtual address that could even resolve there.</li>
+          <li><strong>Predictability</strong> — every run of <code>codexion</code> can assume a similar clean address space layout regardless of what else is running on the machine, because the OS/loader constructs a fresh mapping every time (subject to ASLR randomization for security, which shifts the base addresses but preserves the relative layout).</li>
+        </ul>
+      </div>
+
+      <div class="section" id="ch4-s2">
+        <h3>4.3 &nbsp;Paging &amp; lazy allocation</h3>
+        <p>When you call <code>malloc(sizeof(struct dongle) * number_of_coders)</code>, the kernel very often doesn't immediately hand you real, backed physical memory. Underneath glibc's allocator, a large enough request typically becomes an <code>mmap()</code> call, which reserves a range of <em>virtual</em> addresses and marks them in your page table — but the corresponding physical pages may not be allocated until you actually write to them for the first time (a <strong>page fault</strong> triggers the kernel to find a free physical frame and update the page table on demand). This is <strong>demand paging</strong>, and it's why allocating a huge buffer you never touch is nearly free, while allocating a smaller buffer you immediately fill triggers real physical memory pressure.</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is one honest reason a first access to your freshly <code>malloc</code>'d dongle array can occasionally show up as very slightly slower than subsequent accesses in fine-grained timing measurements — the very first touch of each page may cost a page fault, a detail worth knowing if you ever see a small, consistent timing anomaly only on the first compile cycle and want to explain it accurately rather than blaming your synchronization logic.</div>
+        <div id="ch4-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 4 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Explain why two separate runs of <code>codexion</code> at the same time never risk one instance's dongle array pointer accidentally referring to the other instance's memory.</li>
+          <li>What triggers a page fault during a normal, bug-free <code>malloc()</code>-then-write sequence, and why is that not actually an error?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 5 ============ -->
+    <section class="chapter" id="ch5">
+      <div class="chapter-label">Chapter 05</div>
+      <h2>Process memory layout</h2>
+
+      <div class="section" id="ch5-s0">
+        <h3>5.1 &nbsp;.text, .data, .bss</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        A process's address space isn't a flat undifferentiated pile — it's carved into regions because code and different kinds of data have genuinely different lifetimes, mutability, and sharing requirements, and treating them uniformly would throw away real opportunities (like marking code read-only and shareable across processes running the same binary).</div>
+        <table>
+          <tr><th>Region</th><th>Comes from which ELF segment</th><th>Properties</th></tr>
+          <tr><td><code>.text</code></td><td><code>PT_LOAD</code> (read+execute)</td><td>Your compiled instructions; read-only, executable; can be shared in physical memory across multiple processes running the same binary</td></tr>
+          <tr><td><code>.data</code></td><td><code>PT_LOAD</code> (read+write)</td><td>Explicitly initialized globals/statics (e.g. <code>int x = 5;</code> at file scope)</td></tr>
+          <tr><td><code>.bss</code></td><td>Same <code>PT_LOAD</code>, but occupies no space in the file</td><td>Zero-initialized globals/statics (e.g. <code>int y;</code> at file scope) — the loader just zero-fills this region rather than reading it from disk, saving file space</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch5-s1">
+        <h3>5.2 &nbsp;Heap vs. stack</h3>
+        <p>Neither the heap nor the (initial) stack corresponds to a segment described directly in the ELF file — they're set up dynamically at runtime, not loaded from disk content:</p>
+        <ul>
+          <li><strong>Heap</strong> — grows on demand as your program calls <code>malloc()</code> (via the <code>brk()</code> syscall for small/traditional allocations, or <code>mmap()</code> for larger ones). Shared by every thread in the process (Volume 2 covers exactly why).</li>
+          <li><strong>Stack</strong> — set up by the kernel at <code>execve()</code> time for the initial thread (Chapter 3); each additional thread created later via <code>pthread_create()</code> gets its own separate stack, privately mapped, not part of the original ELF-derived layout at all.</li>
+        </ul>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 420 260" xmlns="http://www.w3.org/2000/svg">
+            <text x="210" y="20" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--text-dim)">high addresses</text>
+            <rect x="80" y="30" width="260" height="30" fill="none" stroke="var(--accent-refactor)" stroke-width="1.5"/>
+            <text x="210" y="50" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">stack (main thread) — grows ↓</text>
+            <text x="210" y="80" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">— unmapped gap —</text>
+            <rect x="80" y="100" width="260" height="30" fill="none" stroke="var(--accent-take)" stroke-width="1.5"/>
+            <text x="210" y="120" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">mmap region: shared libs, thread stacks</text>
+            <rect x="80" y="140" width="260" height="30" fill="none" stroke="var(--accent-debug)" stroke-width="1.5"/>
+            <text x="210" y="160" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">heap — grows ↑ (malloc/brk)</text>
+            <rect x="80" y="180" width="260" height="25" fill="none" stroke="var(--accent-compile)" stroke-width="1.5"/>
+            <text x="210" y="197" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">.bss</text>
+            <rect x="80" y="205" width="260" height="25" fill="none" stroke="var(--accent-compile)" stroke-width="1.5"/>
+            <text x="210" y="222" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">.data</text>
+            <rect x="80" y="230" width="260" height="25" fill="none" stroke="var(--accent-take)" stroke-width="1.5"/>
+            <text x="210" y="247" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">.text</text>
+          </svg>
+          <div class="diagram-caption">A typical Linux process address space, low to high addresses. Thread stacks for pthread_create'd threads live in the mmap region, not next to the main stack.</div>
+        </div>
+      </div>
+
+      <div class="section" id="ch5-s2">
+        <h3>5.3 &nbsp;Mapping ELF segments to runtime regions</h3>
+        <p>Putting the whole pipeline together: your <code>codexion.c</code> compiles down to machine code and initialized/uninitialized global data (Chapter 1); the linker packages that into ELF sections, then groups them into <code>PT_LOAD</code> segments (Chapter 2); at <code>execve()</code> time, the kernel maps each segment at its specified virtual address, becoming your process's <code>.text</code>/<code>.data</code>/<code>.bss</code> regions (Chapter 3); the heap and per-thread stacks are then built up dynamically as your program runs and calls <code>malloc()</code>/<code>pthread_create()</code>.</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This full pipeline is the precise, mechanical reason "global variables are forbidden" bites exactly where it does: anything you declare at file scope ends up baked into <code>.data</code>/<code>.bss</code>, mapped once at process start, implicitly reachable from every thread with zero traceability about who's allowed to touch it when. Your dongle array, by contrast, deliberately lives on the heap — built at runtime, reached only via an explicit pointer you pass into each thread — which is a structural, not just stylistic, difference in how the two kinds of memory come to exist.</div>
+        <div id="ch5-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 5 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why does <code>.bss</code> take up no space in the actual ELF file on disk, despite occupying real memory at runtime?</li>
+          <li>Where do the stacks for your coder threads (created via <code>pthread_create</code>) live, relative to the main thread's original stack?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 6 ============ -->
+    <section class="chapter" id="ch6">
+      <div class="chapter-label">Chapter 06</div>
+      <h2>Why processes exist, why threads were invented</h2>
+
+      <div class="section" id="ch6-s0">
+        <h3>6.1 &nbsp;Isolation as the reason for processes</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Everything in Chapters 1–5 — ELF's careful segment layout, the MMU's address translation, execve()'s full address-space replacement — exists in service of one goal: letting many independent programs run on one machine without any of them being able to corrupt or spy on each other by accident or malice. That goal is <strong>isolation</strong>, and the process is the unit isolation is built around.</div>
+        <p>A process gets: its own virtual address space (Chapter 4), its own file descriptor table, its own set of signal handlers, its own resource limits. None of this is shared with any other process by default. This is exactly why a segfault from a stray pointer bug in your <code>codexion</code> binary can never corrupt your terminal, your text editor, or the operating system itself — there is no virtual address in your process's page tables that could even resolve into their memory.</p>
+      </div>
+
+      <div class="section" id="ch6-s1">
+        <h3>6.2 &nbsp;The sharing problem processes create</h3>
+        <p>Isolation is a feature until you need two things to cooperate closely. Say you wanted 5 independent <em>processes</em> to act as Codexion's 5 coders, all fighting over a shared pool of dongles. Because processes are isolated by design, they cannot see each other's heap-allocated structs at all — coordinating "dongle #2 is now taken" between two separate address spaces requires deliberately opting back into some form of shared state via heavyweight inter-process communication: a <code>shm_open()</code>/<code>mmap()</code> shared memory segment, named semaphores, or message-passing over pipes/sockets — all considerably more machinery than a single <code>malloc()</code>'d struct and a mutex.</p>
+        <div class="analogy-box"><span class="tag">Analogy — separate buildings vs. one office</span>
+        Five separate processes are five separate office buildings: secure, but coordinating requires phone calls, couriers, or a shared mailbox system you have to build. Five threads in one process are five desks in one shared office: everyone can just reach across and grab the same physical folder off the same shared shelf (the heap) — fast, but now you need office etiquette (mutexes) so two people don't grab the same folder at once.</div>
+      </div>
+
+      <div class="section" id="ch6-s2">
+        <h3>6.3 &nbsp;Threads as the fix</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Threads were invented to give you concurrency — multiple independent flows of execution making progress — <em>without</em> paying the isolation tax when you don't want it. A thread is, at the OS level (concretely: at the <code>clone()</code> level, covered fully in Volume 2), a schedulable unit that deliberately opts <em>back into</em> sharing the parent's address space, file descriptors, and signal handlers, while still getting its own private stack, registers, and scheduling state.</div>
+        <p>This is precisely the tradeoff Codexion is built to teach: the coders need to share a small, contended pool of dongles cheaply and directly — a textbook case for threads, not processes. Every mutex, condition variable, and heap-based scheduler you build in this project exists because threads chose "share by default, synchronize deliberately" instead of processes' "isolated by default, share only with deliberate machinery."</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is the direct answer to "why does the subject mandate threads (<code>pthread_create</code>) instead of letting you fork 5 separate coder processes": five isolated processes would need cross-process IPC just to agree on dongle state, while five threads can share one <code>malloc</code>'d array and coordinate with nothing heavier than <code>pthread_mutex_t</code>/<code>pthread_cond_t</code> — the entire mandatory toolset the subject gives you only makes sense in a shared-memory world.</div>
+        <div id="ch6-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 6 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Name two concrete things a process gets that are never shared with any other process by default.</li>
+          <li>If Codexion were rewritten to use 5 separate processes instead of 5 threads, name one specific POSIX mechanism you'd need to introduce just to let them agree on dongle availability.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"In one sentence: what does a thread give up, relative to a process, in exchange for cheap shared memory?" Be ready to name the specific isolation properties threads forgo (separate address space, primarily).</li>
+        </ol></div>
+      </div>
+    </section>
+
+    </div><!-- /chapters-root -->
+
+  </main>
+</div>
+
+<script>
+/* ================= THEME ================= */
+function toggleTheme(){
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  document.getElementById('theme-toggle').textContent = isLight ? '☀ light mode' : '🌙 dark mode';
+}
+
+/* ================= PROGRESS BAR ================= */
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+});
+
+/* ================= HERO DIAGRAM (SVG, generated) ================= */
+(function(){
+  const N = 5, R = 110, cx=180, cy=150;
+  let coders = [], dongles = [];
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + i*(2*Math.PI/N);
+    coders.push({x: cx+R*Math.cos(a), y: cy+R*Math.sin(a), n:i+1});
+  }
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + (i+0.5)*(2*Math.PI/N);
+    dongles.push({x: cx+ (R-38)*Math.cos(a), y: cy+(R-38)*Math.sin(a)});
+  }
+  let svg = `<svg viewBox="0 0 360 320" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<circle cx="${cx}" cy="${cy}" r="34" fill="none" stroke="var(--accent-compile)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  svg += `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">QUANTUM</text>`;
+  svg += `<text x="${cx}" y="${cy+9}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">COMPILER</text>`;
+  dongles.forEach((d,i) => {
+    svg += `<rect x="${d.x-9}" y="${d.y-6}" width="18" height="12" rx="2" fill="var(--accent-take)" opacity="0.85"/>`;
+  });
+  coders.forEach(c => {
+    svg += `<circle cx="${c.x}" cy="${c.y}" r="20" fill="var(--bg-elev)" stroke="var(--accent-refactor)" stroke-width="2"/>`;
+    svg += `<text x="${c.x}" y="${c.y+4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" fill="var(--text)">${c.n}</text>`;
+  });
+  svg += `</svg>`;
+  document.getElementById('hero-diagram').innerHTML = svg;
+})();
+
+/* ================= QUIZ ENGINE ================= */
+function renderQuiz(container, q){
+  const div = document.createElement('div');
+  div.className = 'quiz';
+  div.innerHTML = `<div class="q-title">Check yourself</div><div class="q-text">${q.q}</div><div class="opts"></div><div class="feedback"></div>`;
+  const opts = div.querySelector('.opts');
+  q.options.forEach((opt, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.textContent = opt;
+    btn.onclick = () => {
+      const fb = div.querySelector('.feedback');
+      [...opts.children].forEach(b => b.disabled = true);
+      if(idx === q.correct){
+        btn.classList.add('correct');
+      } else {
+        btn.classList.add('wrong');
+        opts.children[q.correct].classList.add('correct');
+      }
+      fb.textContent = q.explain;
+      fb.classList.add('show');
+    };
+    opts.appendChild(btn);
+  });
+  container.appendChild(div);
+}
+</script>
+
+<script>
+/* ================= SIDEBAR NAV ================= */
+const chapterMeta = [
+  {n:1, title:"From source code to executable", sections:["Preprocessing","Compiling to assembly","Assembling to object code","Linking"]},
+  {n:2, title:"ELF files", sections:["Why a file format at all","ELF header & sections","Segments: what the loader actually reads"]},
+  {n:3, title:"Process creation & execve()", sections:["fork() then exec()","What execve() actually replaces","Building the initial stack"]},
+  {n:4, title:"Virtual memory", sections:["The MMU & page tables","Why every address is a lie","Paging & lazy allocation"]},
+  {n:5, title:"Process memory layout", sections:[".text, .data, .bss","Heap vs. stack","Mapping ELF segments to runtime regions"]},
+  {n:6, title:"Why processes exist, why threads were invented", sections:["Isolation as the reason for processes","The sharing problem processes create","Threads as the fix"]},
+];
+const navList = document.getElementById('nav-list');
+chapterMeta.forEach(ch => {
+  const wrap = document.createElement('div');
+  wrap.className = 'nav-chapter';
+  const head = document.createElement('div');
+  head.className = 'nav-chapter-head';
+  head.innerHTML = `<span class="num">${String(ch.n).padStart(2,'0')}</span><span>${ch.title}</span><span class="arrow">›</span>`;
+  head.onclick = () => wrap.classList.toggle('open');
+  wrap.appendChild(head);
+  const secs = document.createElement('div');
+  secs.className = 'nav-sections';
+  ch.sections.forEach((s,i) => {
+    const a = document.createElement('a');
+    a.href = `#ch${ch.n}-s${i}`;
+    a.textContent = s;
+    secs.appendChild(a);
+  });
+  wrap.appendChild(secs);
+  navList.appendChild(wrap);
+});
+// open chapter 1 by default
+navList.querySelector('.nav-chapter').classList.add('open');
+
+/* ================= QUIZ DATA ================= */
+renderQuiz(document.getElementById('ch1-quiz1'), {
+  q: "Your code compiles cleanly with zero warnings under -Wall -Wextra -Werror, but linking fails with 'undefined reference to pthread_create'. Which pipeline stage is failing, and why didn't the compiler catch it?",
+  options: [
+    "The preprocessor failed, because #include <pthread.h> was missing.",
+    "The linker failed — it couldn't find pthread_create's actual machine code in any object file or library, a problem the compiler (which only checks syntax and types against declarations) has no way to detect.",
+    "The assembler failed, because pthread_create isn't valid assembly.",
+    "This error is impossible if -Wall -Wextra -Werror passes."
+  ],
+  correct: 1,
+  explain: "Correct. The compiler only needs pthread_create's declaration (from the header) to typecheck your call. Whether the actual compiled implementation can be found and connected is entirely the linker's job — and exactly why forgetting -pthread at the link step causes this specific error."
+});
+renderQuiz(document.getElementById('ch2-quiz1'), {
+  q: "When the kernel loads your codexion binary via execve(), does it consult the ELF file's sections (like .text, .symtab) or its segments (program headers)?",
+  options: [
+    "Sections — the kernel reads .text, .data, .bss directly by name.",
+    "Segments (program headers) — a coarser view describing which byte ranges to mmap where, with what permissions; sections are a linker/debugger-level concept the kernel doesn't need at load time.",
+    "Both, with equal importance for every load.",
+    "Neither — the kernel only reads the ELF header's entry point field."
+  ],
+  correct: 1,
+  explain: "Right. Segments (PT_LOAD, PT_DYNAMIC, PT_INTERP, etc.) are what the loader actually maps into memory. Sections exist for linking and debugging, not for the kernel's runtime loading decision."
+});
+renderQuiz(document.getElementById('ch3-quiz1'), {
+  q: "What specifically survives across a call to execve(), and what gets completely discarded?",
+  options: [
+    "Everything survives — execve() only changes which function main() calls.",
+    "The process ID and most process-level bookkeeping (like open file descriptors, unless marked close-on-exec) survive; the entire old address space — code, data, heap, stack contents — is discarded and replaced by the new program's layout.",
+    "Only the PID survives; even open file descriptors are always closed.",
+    "The address space survives; only the PID changes."
+  ],
+  correct: 1,
+  explain: "Correct. execve() is a replacement of the program image within the same process identity — PID and most process-level state persist, but the old memory contents are gone, replaced entirely by the new binary's ELF-derived layout."
+});
+renderQuiz(document.getElementById('ch4-quiz1'), {
+  q: "Two separate instances of codexion are running at once. Why can't a stray pointer bug in one instance's coder thread ever corrupt the other instance's dongle array, even if both happen to use the same virtual address value like 0x603010?",
+  options: [
+    "Because the kernel randomly assigns different address ranges to different programs so collisions are statistically unlikely.",
+    "Because each process has its own independent page table, so the same virtual address in two different processes is translated by the MMU to two completely different (or entirely unmapped) physical addresses.",
+    "Because ELF files prevent the same address from being used twice.",
+    "Because malloc() refuses to return the same address across different processes."
+  ],
+  correct: 1,
+  explain: "Right. Isolation isn't a convention here — it's enforced by separate page tables per process, translated by the MMU. The same virtual address number simply has no relationship across two different processes' address spaces."
+});
+renderQuiz(document.getElementById('ch5-quiz1'), {
+  q: "Why does .bss take up essentially no space in the ELF file on disk, despite occupying real memory once the process is running?",
+  options: [
+    "Because .bss variables are actually stored in .data and just renamed at runtime.",
+    "Because .bss only needs to record a size — all its variables start as zero, so the loader just zero-fills that much memory at load time instead of reading initial values from the file.",
+    "Because .bss is compressed more efficiently than .data.",
+    "Because .bss variables are optimized away by the compiler entirely."
+  ],
+  correct: 1,
+  explain: "Correct. Since every .bss variable's initial value is zero, there's nothing meaningful to store on disk — just a size the loader uses to zero-fill the right amount of memory."
+});
+renderQuiz(document.getElementById('ch6-quiz1'), {
+  q: "If Codexion were rewritten to use 5 separate processes instead of 5 threads for its coders, what would you need to add just to let them agree on shared dongle state?",
+  options: [
+    "Nothing — separate processes can already read and write each other's heap memory directly.",
+    "Some form of inter-process communication opting back into shared state, such as a shared memory segment (shm_open/mmap) plus cross-process synchronization — because isolated address spaces cannot see each other's malloc'd memory at all.",
+    "Just a global variable, since globals are visible across all processes on the machine.",
+    "A single shared pthread_mutex_t declared in one process's source file."
+  ],
+  correct: 1,
+  explain: "Right. Process isolation means no process can see another's heap by default — sharing state across processes requires deliberately opting back in via mechanisms like shared memory segments, which is exactly the extra machinery threads let you skip."
+});
+</script>
+
+
+</body>
+</html>

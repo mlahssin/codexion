@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codexion Course 9: Debugging Threads</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f14; --bg-elev:#12151c; --bg-card:#171b24; --border:#252b38;
+  --text:#e7e9ee; --text-dim:#9aa3b5; --text-faint:#5c6478;
+  --accent-take:#5ee6ff;   /* has taken a dongle */
+  --accent-compile:#4f8cff; /* compiling */
+  --accent-debug:#ffb454;   /* debugging */
+  --accent-refactor:#b98eff;/* refactoring */
+  --accent-burnout:#ff5470; /* burned out */
+  --mono:'IBM Plex Mono', monospace;
+  --sans:'Inter', sans-serif;
+  --radius:10px;
+}
+html[data-theme="light"]{
+  --bg:#f5f6f8; --bg-elev:#ffffff; --bg-card:#ffffff; --border:#dde1e8;
+  --text:#191c22; --text-dim:#565f70; --text-faint:#8890a0;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  line-height:1.65; font-size:16px; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent-compile);}
+code, .mono{font-family:var(--mono);}
+
+/* ---------- Progress bar ---------- */
+#progress-bar{position:fixed; top:0; left:0; height:3px; background:linear-gradient(90deg,var(--accent-take),var(--accent-compile),var(--accent-debug),var(--accent-refactor)); width:0%; z-index:1000; transition:width .1s linear;}
+
+/* ---------- Layout ---------- */
+#app{display:flex; min-height:100vh;}
+#sidebar{
+  width:300px; flex-shrink:0; background:var(--bg-elev); border-right:1px solid var(--border);
+  position:sticky; top:0; height:100vh; overflow-y:auto; padding:20px 0 60px;
+}
+#sidebar .brand{padding:0 20px 16px; border-bottom:1px solid var(--border); margin-bottom:12px;}
+#sidebar .brand-title{font-family:var(--mono); font-weight:700; font-size:1.05rem; letter-spacing:.02em;}
+#sidebar .brand-sub{color:var(--text-faint); font-size:.78rem; margin-top:4px;}
+#theme-toggle{
+  margin-top:12px; background:var(--bg-card); border:1px solid var(--border); color:var(--text);
+  padding:6px 12px; border-radius:20px; font-size:.75rem; cursor:pointer; font-family:var(--mono);
+}
+.nav-chapter{border-bottom:1px solid var(--border);}
+.nav-chapter-head{
+  display:flex; align-items:center; gap:10px; padding:10px 20px; cursor:pointer; user-select:none;
+  font-size:.86rem; color:var(--text-dim); transition:color .15s;
+}
+.nav-chapter-head:hover{color:var(--text);}
+.nav-chapter-head .num{font-family:var(--mono); color:var(--text-faint); font-size:.75rem; width:20px; flex-shrink:0;}
+.nav-chapter-head .arrow{margin-left:auto; transition:transform .2s; font-size:.7rem; color:var(--text-faint);}
+.nav-chapter.open .arrow{transform:rotate(90deg);}
+.nav-sections{max-height:0; overflow:hidden; transition:max-height .25s ease;}
+.nav-chapter.open .nav-sections{max-height:500px;}
+.nav-sections a{
+  display:block; padding:6px 20px 6px 50px; font-size:.8rem; color:var(--text-faint);
+  text-decoration:none; border-left:2px solid transparent;
+}
+.nav-sections a:hover, .nav-sections a.active{color:var(--accent-compile); border-left-color:var(--accent-compile);}
+
+#main{flex:1; min-width:0; max-width:900px; margin:0 auto; padding:60px 48px 160px;}
+
+/* ---------- Hero ---------- */
+.hero{padding:20px 0 50px; border-bottom:1px solid var(--border); margin-bottom:50px;}
+.hero-eyebrow{font-family:var(--mono); font-size:.78rem; color:var(--accent-take); letter-spacing:.08em; text-transform:uppercase; margin-bottom:14px;}
+.hero h1{font-family:var(--mono); font-size:2.4rem; font-weight:700; line-height:1.15; margin-bottom:16px;}
+.hero p.lead{color:var(--text-dim); font-size:1.08rem; max-width:640px; margin-bottom:32px;}
+.legend{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:36px;}
+.legend .chip{
+  display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:.76rem;
+  padding:6px 12px; border-radius:20px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-dim);
+}
+.legend .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+
+/* ---------- Chapter content ---------- */
+.chapter{margin-bottom:90px; scroll-margin-top:20px;}
+.chapter-label{font-family:var(--mono); color:var(--text-faint); font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px;}
+.chapter h2{font-family:var(--mono); font-size:1.9rem; margin-bottom:26px; padding-bottom:16px; border-bottom:1px solid var(--border);}
+.section{scroll-margin-top:20px; margin-bottom:44px;}
+.section h3{font-size:1.25rem; margin-bottom:14px; font-weight:700;}
+.section h4{font-size:1.02rem; margin:20px 0 10px; font-weight:700; color:var(--text-dim);}
+.section p{margin-bottom:14px; max-width:70ch;}
+.section ul, .section ol{margin:0 0 14px 22px;}
+.section li{margin-bottom:6px;}
+
+.why-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-take);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.why-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-take); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.codexion-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-refactor);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.codexion-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-refactor); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.analogy-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-debug);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.analogy-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+pre{
+  background:#08090c; border:1px solid var(--border); border-radius:8px; padding:16px 18px;
+  overflow-x:auto; margin:16px 0; font-size:.86rem; line-height:1.55;
+}
+html[data-theme="light"] pre{background:#f0f1f4;}
+pre code{font-family:var(--mono); color:#c8ccd8;}
+html[data-theme="light"] pre code{color:#2b2f3a;}
+.log-line{display:block;}
+.log-ts{color:var(--text-faint);}
+.log-take{color:var(--accent-take);}
+.log-compile{color:var(--accent-compile);}
+.log-debug{color:var(--accent-debug);}
+.log-refactor{color:var(--accent-refactor);}
+.log-burnout{color:var(--accent-burnout); font-weight:600;}
+
+.expandable{border:1px solid var(--border); border-radius:8px; margin:16px 0; overflow:hidden;}
+.expandable summary{
+  padding:13px 18px; cursor:pointer; font-weight:600; font-size:.92rem; background:var(--bg-card);
+  list-style:none; display:flex; align-items:center; gap:10px;
+}
+.expandable summary::-webkit-details-marker{display:none;}
+.expandable summary::before{content:'+'; font-family:var(--mono); color:var(--accent-compile); font-weight:700;}
+.expandable[open] summary::before{content:'−';}
+.expandable .body{padding:16px 18px; border-top:1px solid var(--border);}
+
+svg{max-width:100%; height:auto;}
+.diagram-wrap{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:24px; margin:20px 0; text-align:center;}
+.diagram-caption{font-size:.82rem; color:var(--text-faint); margin-top:10px; font-family:var(--mono);}
+
+/* ---------- Quiz ---------- */
+.quiz{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:22px 24px; margin:20px 0;}
+.quiz .q-title{font-family:var(--mono); font-size:.75rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px;}
+.quiz .q-text{font-weight:600; margin-bottom:14px;}
+.quiz .opts{display:flex; flex-direction:column; gap:8px;}
+.quiz button.opt{
+  text-align:left; padding:11px 14px; background:var(--bg-elev); border:1px solid var(--border); border-radius:7px;
+  color:var(--text); cursor:pointer; font-family:var(--sans); font-size:.92rem; transition:.15s;
+}
+.quiz button.opt:hover{border-color:var(--accent-compile);}
+.quiz button.opt.correct{border-color:#3ecf8e; background:rgba(62,207,142,.12);}
+.quiz button.opt.wrong{border-color:var(--accent-burnout); background:rgba(255,84,112,.12);}
+.quiz .feedback{margin-top:12px; font-size:.88rem; color:var(--text-dim); display:none;}
+.quiz .feedback.show{display:block;}
+
+/* ---------- Exercises ---------- */
+.exercises{background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:24px 26px; margin-top:30px;}
+.exercises h4{font-family:var(--mono); font-size:.8rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;}
+.ex-group{margin-top:16px;}
+.ex-group .ex-label{font-size:.78rem; color:var(--accent-take); font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;}
+.ex-group ol{margin-left:20px;}
+.ex-group li{margin-bottom:8px; color:var(--text-dim); font-size:.94rem;}
+
+table{width:100%; border-collapse:collapse; margin:16px 0; font-size:.9rem;}
+th,td{border:1px solid var(--border); padding:8px 12px; text-align:left;}
+th{background:var(--bg-card); font-family:var(--mono); font-size:.78rem; text-transform:uppercase;}
+
+.nav-footer{display:flex; justify-content:space-between; margin-top:60px; padding-top:24px; border-top:1px solid var(--border);}
+.nav-footer a{font-family:var(--mono); font-size:.85rem; text-decoration:none; color:var(--text-dim); display:flex; flex-direction:column;}
+.nav-footer a:hover{color:var(--accent-compile);}
+.nav-footer .lbl{font-size:.7rem; color:var(--text-faint); text-transform:uppercase; margin-bottom:4px;}
+
+@media (max-width:860px){
+  #sidebar{position:fixed; left:-300px; z-index:900; transition:left .2s; box-shadow:0 0 40px rgba(0,0,0,.4);}
+  #sidebar.open{left:0;}
+  #main{padding:60px 20px 120px; max-width:100%;}
+  #menu-btn{display:flex !important;}
+}
+#menu-btn{
+  display:none; position:fixed; top:16px; left:16px; z-index:950; width:40px; height:40px;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:8px; color:var(--text);
+  align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem;
+}
+</style>
+</head>
+<body>
+<div id="progress-bar"></div>
+<div id="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</div>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="brand">
+      <div class="brand-title">// codexion — course 9</div>
+      <div class="brand-sub">Debugging threads</div>
+      <button id="theme-toggle" onclick="toggleTheme()">☀ light mode</button>
+    </div>
+    <div id="nav-list"></div>
+  </nav>
+
+  <main id="main">
+
+    <section class="hero">
+      <div class="hero-eyebrow">Course 9 of the Codexion series</div>
+      <h1>Debugging threads</h1>
+      <p class="lead">Concurrency breaks the assumption every debugging habit rests on: that the same input produces the same execution. A race can hide through ten thousand clean runs and surface during your defense. A printf added to investigate can make it disappear. This course covers the tools that reason about your code's <em>structure</em> rather than one lucky run's <em>outcome</em> — GDB for problems that happened, Helgrind and TSan for problems that haven't yet — and ends with the exact checklist an evaluator will run against you.</p>
+      <div class="legend">
+        <div class="chip"><span class="dot" style="background:var(--accent-take)"></span> has taken a dongle</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-compile)"></span> compiling</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-debug)"></span> debugging</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-refactor)"></span> refactoring</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-burnout)"></span> burned out</div>
+      </div>
+      <div class="diagram-wrap" id="hero-diagram"></div>
+      <div class="diagram-caption">The Codexion hub: N coders in a circle, N dongles between them, one shared Quantum Compiler in the center.</div>
+    </section>
+
+    <div id="chapters-root">
+
+    <!-- ============ CHAPTER 1 ============ -->
+    <section class="chapter" id="ch1">
+      <div class="chapter-label">Chapter 01</div>
+      <h2>Why threads break debugging</h2>
+
+      <div class="section" id="ch1-s0">
+        <h3>1.1 &nbsp;The reproducibility problem</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Single-threaded debugging rests on an assumption so basic you never notice it: <em>same input, same execution</em>. Set a breakpoint, run it again, you land in the same place with the same state. Concurrency destroys that. The interleaving of your five coder threads is chosen by the scheduler, influenced by system load, cache state, and luck. The same binary with the same arguments can take a different path every single run.</div>
+        <p>The consequences are specific and brutal:</p>
+        <ul>
+          <li>A bug that appears once in 10,000 runs is not reproducible on demand — you can't step through it.</li>
+          <li>Attaching a debugger <em>changes the timing</em>, so the bug often stops appearing (a "heisenbug").</li>
+          <li>Adding a <code>printf</code> to investigate serializes threads slightly and can make the bug vanish.</li>
+          <li>Passing every test proves nothing. The race was there; the interleaving just never came up.</li>
+        </ul>
+      </div>
+
+      <div class="section" id="ch1-s1">
+        <h3>1.2 &nbsp;Why the evaluation scale doesn't trust you</h3>
+        <p>Read what the scale actually instructs evaluators to do:</p>
+        <div class="why-box"><span class="tag">From the evaluation scale</span>
+        "Since this is a concurrency project, you must also check for data races and deadlocks, <strong>which are not always visible by simply reading the logs</strong>. Use the thread-specific tooling available on the computer… <strong>Do not simply trust the evaluated student's explanation that the code is thread-safe.</strong>"</div>
+        <p>That's not skepticism about you personally. It's an acknowledgement that <em>nobody</em> can prove thread-safety by observation. Correct-looking output is compatible with a fatal race. The scale requires tools because tools reason about the <em>structure</em> of your synchronization, not the outcome of one lucky run.</p>
+      </div>
+
+      <div class="section" id="ch1-s2">
+        <h3>1.3 &nbsp;The right mental model</h3>
+        <div class="why-box"><span class="tag">The shift</span>
+        Stop asking "did it produce the right answer?" Start asking "<strong>could any interleaving produce a wrong answer?</strong>" The first question is answered by running the program. The second is answered by analysis — either your own reasoning about happens-before relationships (Course 4), or a tool that does that reasoning for you. Only the second question is the one that matters.</div>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This reframing is the whole course. You will use GDB for the crashes and hangs — problems with a location. You will use Helgrind, DRD, and ThreadSanitizer for the races — problems with no location, that may not have happened yet, and that the scale will find whether or not you did.</div>
+        <div id="ch1-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 1 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Explain why adding a printf to investigate a race can make the race disappear. What does that tell you about printf-based debugging here?</li>
+          <li>Rewrite the question "did my program work?" into the form that actually matters for concurrency.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 2 ============ -->
+    <section class="chapter" id="ch2">
+      <div class="chapter-label">Chapter 02</div>
+      <h2>GDB with threads</h2>
+
+      <div class="section" id="ch2-s0">
+        <h3>2.1 &nbsp;The essential commands</h3>
+        <p>GDB knows about threads. Compile with <code>-g</code> (keep <code>-Wall -Wextra -Werror -pthread</code>) and these become your core vocabulary:</p>
+        <table>
+          <tr><th>Command</th><th>What it does</th></tr>
+          <tr><td><code>info threads</code></td><td>List every thread, its ID, and where it currently is</td></tr>
+          <tr><td><code>thread 3</code></td><td>Switch context to thread 3</td></tr>
+          <tr><td><code>thread apply all bt</code></td><td><strong>Backtrace every thread</strong> — the single most valuable command for a hang</td></tr>
+          <tr><td><code>bt</code></td><td>Backtrace of the current thread</td></tr>
+          <tr><td><code>frame 2</code> / <code>info locals</code></td><td>Inspect a specific stack frame's variables</td></tr>
+          <tr><td><code>set scheduler-locking on</code></td><td>Only the current thread runs while stepping — useful, but changes timing drastically</td></tr>
+          <tr><td><code>break codexion.c:88 thread 3</code></td><td>Breakpoint that fires only for thread 3</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch2-s1">
+        <h3>2.2 &nbsp;Diagnosing a hang</h3>
+        <div class="why-box"><span class="tag">The technique that solves deadlocks</span>
+        Your program hangs. Don't restart it — <strong>attach to it and look at every thread at once</strong>. A deadlock is a cycle, and a cycle is visible the instant you can see all the backtraces side by side.</div>
+        <pre><code>$ ./codexion 5 2000 200 200 200 10 0 fifo &amp;
+# it hangs...
+$ gdb -p $(pgrep codexion)
+(gdb) thread apply all bt</code></pre>
+        <pre><code>Thread 3 (coder 2):
+#0  futex_wait (...) at ...
+#1  __pthread_mutex_lock (mutex=0x5555555592a0) at ...
+#2  take_dongle (d=0x5555555592a0) at codexion.c:88     ← waiting on dongle 3
+#3  coder_routine (arg=0x555555559100) at codexion.c:141
+
+Thread 4 (coder 3):
+#0  futex_wait (...) at ...
+#1  __pthread_mutex_lock (mutex=0x5555555592e0) at ...
+#2  take_dongle (d=0x5555555592e0) at codexion.c:88     ← waiting on dongle 4
+#3  coder_routine (arg=0x555555559130) at codexion.c:141</code></pre>
+        <p>Every coder is blocked in <code>take_dongle</code> at line 88, each on a different mutex address. That's the signature of circular wait (Course 7): everyone holds one dongle and waits for the next. The backtraces make the cycle plain — you don't have to guess.</p>
+      </div>
+
+      <div class="section" id="ch2-s2">
+        <h3>2.3 &nbsp;What GDB can't do</h3>
+        <table>
+          <tr><th>Problem</th><th>GDB?</th></tr>
+          <tr><td>Segfault — where and why</td><td><strong>Yes</strong> — backtrace at the crash site</td></tr>
+          <tr><td>Deadlock — which threads, which locks</td><td><strong>Yes</strong> — <code>thread apply all bt</code></td></tr>
+          <tr><td>Infinite loop / livelock</td><td><strong>Yes</strong> — attach and see where threads are spinning</td></tr>
+          <tr><td>Data race that hasn't manifested</td><td><strong>No</strong> — nothing to break on; the code looks fine</td></tr>
+          <tr><td>Lock-order inversion that hasn't deadlocked yet</td><td><strong>No</strong> — no symptom exists to catch</td></tr>
+        </table>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        GDB is for problems that <em>happened</em>. It has a location, a moment, a stack. The races and latent lock-order bugs the evaluation scale hunts for have none of those — they're properties of your code's structure, not events. That's a different tool entirely, and it's the rest of this course.</div>
+        <div id="ch2-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 2 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Debugging exercise</div><ol>
+          <li>Your program hangs. Write the exact sequence of commands to attach and identify the cycle. What pattern in the output confirms circular wait?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why can GDB find a deadlock but not a data race? What's structurally different about the two problems?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 3 ============ -->
+    <section class="chapter" id="ch3">
+      <div class="chapter-label">Chapter 03</div>
+      <h2>Helgrind</h2>
+
+      <div class="section" id="ch3-s0">
+        <h3>3.1 &nbsp;How it detects races without them happening</h3>
+        <div class="why-box"><span class="tag">The key idea</span>
+        Helgrind doesn't wait for a race to produce wrong output. It builds the <strong>happens-before</strong> relation (Course 4) as your program runs — tracking which memory accesses are provably ordered relative to each other by locks, thread creation, joins, and condition signals. Then it applies the definition directly: two accesses, same address, at least one a write, from different threads, <strong>with no happens-before edge between them</strong> = data race. Reported, whether or not it caused any visible problem on this run.</div>
+        <p>This is why Helgrind finds bugs your testing never will. It's not observing outcomes; it's checking structure.</p>
+        <pre><code>valgrind --tool=helgrind ./codexion 5 2000 200 200 200 10 0 fifo</code></pre>
+      </div>
+
+      <div class="section" id="ch3-s1">
+        <h3>3.2 &nbsp;Reading a race report</h3>
+        <pre><code>==12345== Possible data race during write of size 4 at 0x520A0 by thread #3
+==12345==    at 0x109332: take_dongle (codexion.c:88)
+==12345==    by 0x1094A1: coder_routine (codexion.c:141)
+==12345==  Locks held: none
+==12345== 
+==12345== This conflicts with a previous read of size 4 by thread #2
+==12345==    at 0x1092F1: dongle_is_free (codexion.c:71)
+==12345==    by 0x109488: coder_routine (codexion.c:139)
+==12345==    Locks held: none</code></pre>
+        <p>Read it top to bottom:</p>
+        <ul>
+          <li><strong>Two accesses, same address</strong> (<code>0x520A0</code>) — your dongle's flag.</li>
+          <li><strong>Different threads</strong> (#3 and #2), <strong>at least one a write</strong>. The race definition is satisfied so far.</li>
+          <li><strong><code>Locks held: none</code></strong> — the smoking gun. Had both accesses occurred under the same mutex, Helgrind would see the happens-before edge through the lock's acquire/release and stay silent.</li>
+          <li><strong>Exact lines</strong> — <code>codexion.c:88</code> and <code>codexion.c:71</code>. Go look at line 71: it's almost certainly a check outside the mutex.</li>
+        </ul>
+        <div class="why-box"><span class="tag">"Locks held: none" is the whole message</span>
+        If you learn one thing about reading Helgrind: that line tells you the accesses were unsynchronized. If it instead listed a mutex held by both, there'd be no report. Seeing it means you touched shared mutable state outside the lock — the single most common Codexion bug, usually from an "optimization" that checks availability before bothering to lock.</div>
+      </div>
+
+      <div class="section" id="ch3-s2">
+        <h3>3.3 &nbsp;Lock-order detection</h3>
+        <p>Helgrind also records the order each thread acquires locks and flags inconsistencies across threads — <em>even if no deadlock occurred</em>:</p>
+        <pre><code>==12345== Thread #3: lock order "0x5A0 before 0x5B0" violated
+==12345== Observed (incorrect) order is: acquisition of lock at 0x5B0
+==12345==    at 0x109440: take_dongle (codexion.c:102)
+==12345==  followed by a later acquisition of lock at 0x5A0
+==12345==    at 0x109440: take_dongle (codexion.c:102)</code></pre>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — this is graded</span>
+        This is Helgrind finding your latent circular wait (Course 7) before it ever deadlocks. The scale is unambiguous: "If any of these tools reports a data race or a lock-ordering deadlock, tick the appropriate flag" — meaning 0. Your left-then-right dongle acquisition will produce exactly this report. Fix it with consistent ordering (lowest id first), and the report disappears because the inconsistency is gone.</div>
+        <div id="ch3-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 3 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Debugging exercise</div><ol>
+          <li>A Helgrind report ends with "Locks held: none" on both accesses. What does that tell you, and what's the first line of your code you'd inspect?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Explain how Helgrind reports a race that didn't cause any wrong output. What is it actually checking?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 4 ============ -->
+    <section class="chapter" id="ch4">
+      <div class="chapter-label">Chapter 04</div>
+      <h2>DRD &amp; ThreadSanitizer</h2>
+
+      <div class="section" id="ch4-s0">
+        <h3>4.1 &nbsp;Three tools, one theory</h3>
+        <table>
+          <tr><th></th><th>Helgrind</th><th>DRD</th><th>ThreadSanitizer</th></tr>
+          <tr><td>Mechanism</td><td>Valgrind binary instrumentation</td><td>Valgrind binary instrumentation</td><td>Compile-time instrumentation</td></tr>
+          <tr><td>Invocation</td><td><code>valgrind --tool=helgrind ./x</code></td><td><code>valgrind --tool=drd ./x</code></td><td><code>cc -fsanitize=thread …</code> then run</td></tr>
+          <tr><td>Slowdown</td><td>~20–50×</td><td>~20–50×</td><td>~5–15×</td></tr>
+          <tr><td>Detects lock-order issues</td><td><strong>Yes</strong></td><td>Yes (different heuristics)</td><td>Yes (deadlock detector)</td></tr>
+          <tr><td>Recompile needed</td><td>No</td><td>No</td><td>Yes</td></tr>
+        </table>
+        <p>All three implement variations on happens-before analysis. They differ in internal algorithms, heuristics, and memory-state tracking — which is precisely why they don't always agree.</p>
+      </div>
+
+      <div class="section" id="ch4-s1">
+        <h3>4.2 &nbsp;Why the scale wants all three</h3>
+        <div class="why-box"><span class="tag">From the evaluation scale</span>
+        The scale lists all three explicitly: <code>valgrind --tool=helgrind</code>, <code>valgrind --tool=drd</code>, and "recompiling the project with <code>-fsanitize=thread</code> and running it." That's not redundancy — each tool's heuristics differ enough that one can find what another misses. DRD tracks per-thread state differently from Helgrind; TSan's compile-time instrumentation sees things binary instrumentation can't infer.</div>
+        <p>Run all three yourself, before your defense. It costs minutes and removes the possibility of being surprised.</p>
+        <pre><code># the full sweep
+valgrind --tool=helgrind ./codexion 5 2000 200 200 200 10 0 fifo
+valgrind --tool=drd      ./codexion 5 2000 200 200 200 10 0 fifo
+cc -Wall -Wextra -Werror -pthread -fsanitize=thread -g *.c -o codexion_tsan
+./codexion_tsan 5 2000 200 200 200 10 0 fifo</code></pre>
+      </div>
+
+      <div class="section" id="ch4-s2">
+        <h3>4.3 &nbsp;Reading a TSan report</h3>
+        <pre><code>WARNING: ThreadSanitizer: data race (pid=4242)
+  Write of size 4 at 0x7b0400000d20 by thread T3 (mutexes: write M12):
+    #0 take_dongle codexion.c:88
+
+  Previous read of size 4 at 0x7b0400000d20 by thread T2:
+    #0 dongle_is_free codexion.c:71
+
+  Location is heap block of size 240 at 0x7b0400000d00 allocated by main thread</code></pre>
+        <p>TSan's output is arguably more readable than Helgrind's. Note <code>(mutexes: write M12)</code> on the first access but <strong>nothing</strong> on the second — thread T3 held mutex M12 while writing; thread T2 held nothing while reading. That asymmetry is TSan saying the same thing Helgrind's "Locks held: none" says: one side was unsynchronized. TSan also tells you the racy address is inside a heap block allocated by main — that's your dongle array.</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — timing is meaningless here</span>
+        Under any of these tools, your program runs 5–50× slower and threads are largely serialized. Coders will burn out in configurations that are perfectly feasible natively. <strong>That is expected and is not a bug.</strong> Use these tools to check races and lock ordering; use a native build to check timing (Course 8, Chapter 5). If an evaluator points at the timestamps under Helgrind, this is your answer.</div>
+        <div id="ch4-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 4 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why does the evaluation scale ask for all three tools rather than trusting Helgrind alone?</li>
+          <li>In a TSan report, one access lists "(mutexes: write M12)" and the other lists nothing. What does that asymmetry mean?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 5 ============ -->
+    <section class="chapter" id="ch5">
+      <div class="chapter-label">Chapter 05</div>
+      <h2>Finding races</h2>
+
+      <div class="section" id="ch5-s0">
+        <h3>5.1 &nbsp;The five races you'll actually write</h3>
+        <table>
+          <tr><th>Race</th><th>Why it happens</th><th>Report</th></tr>
+          <tr><td><strong>Unprotected availability check</strong> — <code>if (d-&gt;free)</code> before locking</td><td>Feels like an optimization: avoid locking when obviously busy</td><td>"Locks held: none" on the read</td></tr>
+          <tr><td><strong>Monitor reading <code>last_compile_start</code> unlocked</strong></td><td>"It's just a read, and I only need an approximate value"</td><td>Race between monitor thread and coder</td></tr>
+          <tr><td><strong>Unprotected stop flag</strong> — <code>while (!sim-&gt;stop)</code></td><td>"It's one int, writes are atomic anyway"</td><td>Race between monitor (write) and every coder (read)</td></tr>
+          <tr><td><strong>Unprotected compile counter</strong> — <code>coder-&gt;compiles++</code></td><td>Looks like one statement; it's load-add-store (Course 4)</td><td>Race, and undercounted totals</td></tr>
+          <tr><td><strong>Reading heap state outside the lock</strong> — <code>heap_peek()</code> to "just check"</td><td>Peeking feels read-only and harmless</td><td>Race with any concurrent insert/pop</td></tr>
+        </table>
+        <div class="why-box"><span class="tag">The pattern</span>
+        Every single one is the same mistake wearing a different hat: <em>"this particular access is too small/too read-only/too approximate to need the lock."</em> There is no such access. If shared mutable state is involved, the lock is involved. No exceptions, no optimizations, no "just a bool."</div>
+      </div>
+
+      <div class="section" id="ch5-s1">
+        <h3>5.2 &nbsp;The stop flag deserves its own paragraph</h3>
+        <p>This one is worth dwelling on because the reasoning behind it is so seductive. "It's a single <code>int</code>. The monitor writes 1, coders read it. A torn read is impossible on x86. What could go wrong?"</p>
+        <p>Two things. First, the compiler may hoist the read out of your loop entirely — nothing in the C memory model tells it another thread can change that variable, so <code>while (!sim-&gt;stop)</code> can legally become <code>if (!sim-&gt;stop) while (1)</code>. Your coder never stops. Second, and this is what actually gets flagged: an unsynchronized concurrent read/write is <strong>undefined behavior</strong> in C, regardless of what the hardware would have done. Helgrind and TSan will both report it, and the scale says any reported race is a 0.</p>
+        <div class="why-box"><span class="tag">The fix</span>
+        Read and write the stop flag under the same mutex that protects the rest of your simulation state. It's the natural place anyway — your coders already lock that mutex to check dongle availability, so checking <code>stop</code> in the same critical section is free.</div>
+      </div>
+
+      <div class="section" id="ch5-s2">
+        <h3>5.3 &nbsp;A workflow that finds them</h3>
+        <ol>
+          <li><strong>Run all three tools</strong> on the feasible benchmark (<code>5 2000 200 200 200 10 0 fifo</code>). Clean output is the baseline.</li>
+          <li><strong>Run on the contended case</strong> (<code>5 3000 200 200 200 10 800 fifo</code>). More contention exercises more interleavings.</li>
+          <li><strong>Run the edf variant.</strong> Different code path through your heap.</li>
+          <li><strong>Run the single-coder case</strong> (<code>1 800 200 200 200 10 0 fifo</code>). The degenerate path is where the odd bugs live.</li>
+          <li><strong>For every report</strong>: find the two line numbers, identify which access lacks the lock, fix it. Never suppress a report you don't understand.</li>
+          <li><strong>Re-run until all three are silent</strong> on all four configurations.</li>
+        </ol>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This exact workflow is what the evaluator will run. Running it first turns your defense from a discovery process into a confirmation. Roughly ten minutes of work against the possibility of a 0.</div>
+        <div id="ch5-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 5 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Debugging exercise</div><ol>
+          <li>Your coders check <code>while (!sim-&gt;stop)</code> without the mutex. Name both distinct problems this causes — one compiler-level, one standards-level.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>What single mistaken belief underlies all five of the common races listed? State it in one sentence, then state the rule that replaces it.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 6 ============ -->
+    <section class="chapter" id="ch6">
+      <div class="chapter-label">Chapter 06</div>
+      <h2>Finding deadlocks</h2>
+
+      <div class="section" id="ch6-s0">
+        <h3>6.1 &nbsp;Recognizing what you're looking at</h3>
+        <p>Your program stops producing output. Three different things could be happening, and they need different responses:</p>
+        <table>
+          <tr><th>Symptom</th><th>CPU usage</th><th>Diagnosis</th></tr>
+          <tr><td>No output, program alive</td><td>~0%</td><td><strong>Deadlock</strong> — everyone blocked in futex_wait</td></tr>
+          <tr><td>No output, program alive</td><td>~100%</td><td><strong>Livelock</strong> or infinite loop — threads running, making no progress</td></tr>
+          <tr><td>Output continues, one coder silent</td><td>Normal</td><td><strong>Starvation</strong> (Course 7) — not a deadlock at all</td></tr>
+          <tr><td>Hangs at exit, after the last log line</td><td>~0%</td><td><strong>A thread never woke</strong> — your <code>pthread_join</code> is waiting on a coder still in <code>cond_wait</code></td></tr>
+        </table>
+        <div class="why-box"><span class="tag">Check CPU first</span>
+        <code>top</code> or <code>htop</code> distinguishes deadlock from livelock in two seconds, and they're completely different bugs. 0% means everyone's asleep waiting for each other. 100% means everyone's awake, busy, and achieving nothing.</div>
+      </div>
+
+      <div class="section" id="ch6-s1">
+        <h3>6.2 &nbsp;The hang-at-exit bug</h3>
+        <p>This is the deadlock most Codexion implementations actually hit, and it's not in the coder logic at all — it's in shutdown:</p>
+        <pre><code>// main, after the monitor returns
+for (int i = 0; i &lt; n; i++)
+    pthread_join(tids[i], NULL);   // ← hangs here, forever</code></pre>
+        <p>Why: the monitor set <code>stop = 1</code> and called <code>pthread_cond_signal</code> — waking <em>one</em> waiter. The other four coders are still blocked in <code>pthread_cond_wait</code>, will never be woken, and will never return from <code>coder_routine</code>. <code>pthread_join</code> waits for them forever. Your last log line printed correctly; the program just never exits.</p>
+        <div class="why-box"><span class="tag">The fix</span>
+        <code>pthread_cond_broadcast</code> (Course 6, Chapter 3). One event that every waiter must observe is the definition of a broadcast case. And the coders' wait predicate must include the stop flag: <code>while (!sim-&gt;stop &amp;&amp; !can_take_dongles(coder))</code> — otherwise a woken coder re-checks only the dongle condition, finds it false, and goes straight back to sleep despite the simulation being over.</div>
+        <p>GDB confirms it instantly: <code>thread apply all bt</code> shows four threads in <code>pthread_cond_wait</code> and the main thread in <code>pthread_join</code>. That shape is unmistakable.</p>
+      </div>
+
+      <div class="section" id="ch6-s2">
+        <h3>6.3 &nbsp;Latent vs. actual</h3>
+        <div class="why-box"><span class="tag">The distinction that matters at defense</span>
+        An <strong>actual</strong> deadlock hangs the program — you find it with GDB, on a run where it happened. A <strong>latent</strong> deadlock is a lock-order inversion that hasn't been unlucky yet: it will hang, eventually, on some interleaving. GDB cannot find it, because nothing has gone wrong. Helgrind finds it anyway, by comparing acquisition orders across threads (Chapter 3).</div>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is why "my program has never deadlocked in 200 runs" is not a defense. The scale's instruction to run Helgrind exists precisely to catch latent inversions. A left-then-right dongle acquisition may run cleanly all evening and still be flagged in the first ten seconds of a Helgrind run — because the inconsistent order is in the code, whether or not the timing has exposed it yet.</div>
+        <div id="ch6-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 6 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Debugging exercise</div><ol>
+          <li>Your program prints the burnout line correctly, then hangs and never exits. CPU is 0%. Name the bug, the GDB output that confirms it, and the two-part fix.</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Distinguish latent from actual deadlock. Which tool finds which, and why can't GDB find the latent one?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 7 ============ -->
+    <section class="chapter" id="ch7">
+      <div class="chapter-label">Chapter 07</div>
+      <h2>Debugging Codexion</h2>
+
+      <div class="section" id="ch7-s0">
+        <h3>7.1 &nbsp;Symptom → tool → cause</h3>
+        <table>
+          <tr><th>Symptom</th><th>Tool</th><th>Likely cause</th></tr>
+          <tr><td>Segfault</td><td>GDB backtrace, <code>valgrind --tool=memcheck</code></td><td>NULL deref; use-after-free; array index off by one</td></tr>
+          <tr><td>Hangs, 0% CPU, mid-run</td><td><code>thread apply all bt</code></td><td>Circular wait — everyone in <code>take_dongle</code> on different mutexes</td></tr>
+          <tr><td>Hangs at exit, after last line</td><td><code>thread apply all bt</code></td><td><code>signal</code> instead of <code>broadcast</code>; stop flag missing from predicate</td></tr>
+          <tr><td>Interleaved log lines</td><td>Read the output</td><td>No log mutex, or <code>printf</code> called outside it</td></tr>
+          <tr><td>Two coders hold one dongle</td><td>Helgrind + log analysis</td><td><code>if</code> instead of <code>while</code> around <code>cond_wait</code> (stolen wakeup)</td></tr>
+          <tr><td>One coder always burns out; others fine</td><td>Log analysis</td><td>Starvation — arbitration bug, not a deadlock</td></tr>
+          <tr><td>Burnout line late (&gt;10ms)</td><td>Log timestamps, native build</td><td>Monitor poll too slow; or sleeping under the mutex</td></tr>
+          <tr><td>Memory leaks at exit</td><td><code>valgrind --leak-check=full</code></td><td>Unjoined threads; unfreed heap; missing <code>mutex_destroy</code></td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch7-s1">
+        <h3>7.2 &nbsp;Reading your own logs as evidence</h3>
+        <p>The subject's log format is not decoration — it's a diagnostic instrument. The scale tells evaluators exactly what to look for, which tells you exactly what to check first:</p>
+        <ul>
+          <li><strong>Every "is compiling" is preceded by exactly two "has taken a dongle" lines for the same coder.</strong> One means a bug in your acquisition. Three means you're double-counting.</li>
+          <li><strong>No dongle is taken twice without an intervening release.</strong> Track each dongle's id through the log. A violation is dongle duplication — an automatic 0.</li>
+          <li><strong>No "has taken a dongle" for a given dongle within <code>dongle_cooldown</code> ms of its release.</strong> This is directly checkable by timestamp arithmetic; the scale's 400ms cooldown case exists for it.</li>
+          <li><strong>Phase durations match the parameters</strong> (±tolerance). A compile that takes 340ms when <code>time_to_compile</code> is 200 means you're holding dongles too long.</li>
+          <li><strong>"burned out" is the last line, full stop.</strong></li>
+        </ul>
+        <div class="why-box"><span class="tag">Do this before your defense</span>
+        Run the scale's own benchmark cases and check these five properties by hand — or write a small script to check them. Every one of these is something the evaluator will look for. Finding a violation yourself is a bug fixed; finding it during the defense is a grade lost.</div>
+      </div>
+
+      <div class="section" id="ch7-s2">
+        <h3>7.3 &nbsp;The pre-defense checklist</h3>
+        <pre><code># 1. Clean build, no warnings
+make re                                   # -Wall -Wextra -Werror -pthread
+
+# 2. The scale's four benchmark cases, native, several runs each
+./codexion 1 800  200 200 200 10 0   fifo   # must burn out ~800ms
+./codexion 5 2000 200 200 200 10 0   fifo   # no burnout, stops at 10 compiles
+./codexion 5 2000 200 200 200 7  0   edf    # same, edf path
+./codexion 5 500  200 200 200 10 0   fifo   # must burn out ~500ms, last line
+
+# 3. Contention + cooldown, compare grant order
+./codexion 5 3000 200 200 200 10 800 fifo
+./codexion 5 3000 200 200 200 10 800 edf
+
+# 4. Race and lock-order sweep (ignore timings here)
+valgrind --tool=helgrind ./codexion 5 2000 200 200 200 10 0 fifo
+valgrind --tool=drd      ./codexion 5 2000 200 200 200 10 0 fifo
+cc -Wall -Wextra -Werror -pthread -fsanitize=thread -g *.c -o cx_tsan &amp;&amp; ./cx_tsan 5 2000 200 200 200 10 0 fifo
+
+# 5. Leaks
+valgrind --leak-check=full --show-leak-kinds=all ./codexion 5 2000 200 200 200 10 0 fifo
+
+# 6. The recode: can you turn fifo into lifo in a few minutes?</code></pre>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — that last line</span>
+        The scale includes a recode: "turn the fifo scheduler into a lifo one." If your ordering policy is properly isolated in your heap's comparison function, that's a two-line change and you'll do it calmly in front of the evaluator. If your fifo logic is smeared across your coder routine, you'll be rewriting under pressure. The scale even says it will check "the change is made in the scheduler/queue logic itself and not at a superficial level" — which is really a test of whether you separated policy from mechanism (Course 6, Chapter 7) in the first place.</div>
+        <div id="ch7-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 7 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Debugging exercise</div><ol>
+          <li>Your log shows a coder "is compiling" preceded by only one "has taken a dongle". Where do you look, and what's the likely bug?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>The evaluator asks you to change fifo to lifo. How many lines does it touch in your code? If the answer is more than a handful, what does that say about your design?</li>
+          <li>"How do you know your code is thread-safe?" — answer without using the phrase "it works."</li>
+        </ol></div>
+      </div>
+    </section>
+
+    </div><!-- /chapters-root -->
+
+  </main>
+</div>
+
+<script>
+/* ================= THEME ================= */
+function toggleTheme(){
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  document.getElementById('theme-toggle').textContent = isLight ? '☀ light mode' : '🌙 dark mode';
+}
+
+/* ================= PROGRESS BAR ================= */
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+});
+
+/* ================= HERO DIAGRAM (SVG, generated) ================= */
+(function(){
+  const N = 5, R = 110, cx=180, cy=150;
+  let coders = [], dongles = [];
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + i*(2*Math.PI/N);
+    coders.push({x: cx+R*Math.cos(a), y: cy+R*Math.sin(a), n:i+1});
+  }
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + (i+0.5)*(2*Math.PI/N);
+    dongles.push({x: cx+ (R-38)*Math.cos(a), y: cy+(R-38)*Math.sin(a)});
+  }
+  let svg = `<svg viewBox="0 0 360 320" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<circle cx="${cx}" cy="${cy}" r="34" fill="none" stroke="var(--accent-compile)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  svg += `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">QUANTUM</text>`;
+  svg += `<text x="${cx}" y="${cy+9}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">COMPILER</text>`;
+  dongles.forEach((d,i) => {
+    svg += `<rect x="${d.x-9}" y="${d.y-6}" width="18" height="12" rx="2" fill="var(--accent-take)" opacity="0.85"/>`;
+  });
+  coders.forEach(c => {
+    svg += `<circle cx="${c.x}" cy="${c.y}" r="20" fill="var(--bg-elev)" stroke="var(--accent-refactor)" stroke-width="2"/>`;
+    svg += `<text x="${c.x}" y="${c.y+4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" fill="var(--text)">${c.n}</text>`;
+  });
+  svg += `</svg>`;
+  document.getElementById('hero-diagram').innerHTML = svg;
+})();
+
+/* ================= QUIZ ENGINE ================= */
+function renderQuiz(container, q){
+  const div = document.createElement('div');
+  div.className = 'quiz';
+  div.innerHTML = `<div class="q-title">Check yourself</div><div class="q-text">${q.q}</div><div class="opts"></div><div class="feedback"></div>`;
+  const opts = div.querySelector('.opts');
+  q.options.forEach((opt, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.textContent = opt;
+    btn.onclick = () => {
+      const fb = div.querySelector('.feedback');
+      [...opts.children].forEach(b => b.disabled = true);
+      if(idx === q.correct){
+        btn.classList.add('correct');
+      } else {
+        btn.classList.add('wrong');
+        opts.children[q.correct].classList.add('correct');
+      }
+      fb.textContent = q.explain;
+      fb.classList.add('show');
+    };
+    opts.appendChild(btn);
+  });
+  container.appendChild(div);
+}
+</script>
+
+<script>
+/* ================= SIDEBAR NAV ================= */
+const chapterMeta = [
+  {n:1, title:"Why threads break debugging", sections:["The reproducibility problem","Why the scale doesn't trust you","The right mental model"]},
+  {n:2, title:"GDB with threads", sections:["The essential commands","Diagnosing a hang","What GDB can't do"]},
+  {n:3, title:"Helgrind", sections:["Detecting races that didn't happen","Reading a race report","Lock-order detection"]},
+  {n:4, title:"DRD & ThreadSanitizer", sections:["Three tools, one theory","Why the scale wants all three","Reading a TSan report"]},
+  {n:5, title:"Finding races", sections:["The five races you'll write","The stop flag","A workflow that finds them"]},
+  {n:6, title:"Finding deadlocks", sections:["Recognizing what you're seeing","The hang-at-exit bug","Latent vs. actual"]},
+  {n:7, title:"Debugging Codexion", sections:["Symptom to tool to cause","Logs as evidence","The pre-defense checklist"]},
+];
+const navList = document.getElementById('nav-list');
+chapterMeta.forEach(ch => {
+  const wrap = document.createElement('div');
+  wrap.className = 'nav-chapter';
+  const head = document.createElement('div');
+  head.className = 'nav-chapter-head';
+  head.innerHTML = `<span class="num">${String(ch.n).padStart(2,'0')}</span><span>${ch.title}</span><span class="arrow">›</span>`;
+  head.onclick = () => wrap.classList.toggle('open');
+  wrap.appendChild(head);
+  const secs = document.createElement('div');
+  secs.className = 'nav-sections';
+  ch.sections.forEach((s,i) => {
+    const a = document.createElement('a');
+    a.href = `#ch${ch.n}-s${i}`;
+    a.textContent = s;
+    secs.appendChild(a);
+  });
+  wrap.appendChild(secs);
+  navList.appendChild(wrap);
+});
+// open chapter 1 by default
+navList.querySelector('.nav-chapter').classList.add('open');
+
+/* ================= QUIZ DATA ================= */
+renderQuiz(document.getElementById('ch1-quiz1'), {
+  q: "You add a printf() to investigate an intermittent bug, and the bug stops appearing. What does this tell you?",
+  options: [
+    "The printf fixed the bug — shipping it is a legitimate solution.",
+    "The printf slightly serialized your threads and changed the timing, hiding a race that is still present. It's evidence you have a timing-dependent concurrency bug, and evidence that printf-based debugging is unreliable here.",
+    "The bug was in your original printf statements all along.",
+    "Nothing meaningful — printf has no effect on thread scheduling."
+  ],
+  correct: 1,
+  explain: "Correct. This is the heisenbug problem: observation changes the timing. It's exactly why the evaluation scale mandates structural analysis tools rather than trusting observed behavior."
+});
+renderQuiz(document.getElementById('ch2-quiz1'), {
+  q: "Your program hangs with 0% CPU. Which single GDB command is most likely to reveal the cause immediately?",
+  options: [
+    "break main — then restart and step through from the beginning.",
+    "thread apply all bt — backtracing every thread at once makes a circular wait visible, since you can see each thread blocked on a different mutex.",
+    "info registers — to inspect the CPU state of the current thread.",
+    "watch sim->stop — to catch when the stop flag changes."
+  ],
+  correct: 1,
+  explain: "Right. A deadlock is a cycle, and a cycle is only visible when you can see all the backtraces side by side. Attach to the hung process rather than restarting it."
+});
+renderQuiz(document.getElementById('ch3-quiz1'), {
+  q: "A Helgrind report shows two conflicting accesses, both ending with 'Locks held: none'. What is that line telling you?",
+  options: [
+    "That Helgrind couldn't determine which locks were held, so the report may be a false positive.",
+    "That neither access was protected by any mutex — so there's no happens-before edge between them and it's a genuine unprotected data race. Had both been under the same mutex, Helgrind would have stayed silent.",
+    "That the mutexes involved were destroyed before the accesses occurred.",
+    "That the program has no mutexes at all anywhere."
+  ],
+  correct: 1,
+  explain: "Correct — 'Locks held: none' is the smoking gun. It means you touched shared mutable state outside the lock, usually from an 'optimization' that checks a value before bothering to acquire the mutex."
+});
+renderQuiz(document.getElementById('ch4-quiz1'), {
+  q: "Under Helgrind, your coders burn out in a configuration that runs perfectly natively. What's the correct interpretation?",
+  options: [
+    "You have a real timing bug that only Helgrind's precision reveals.",
+    "Expected and not a bug: Valgrind serializes threads and slows execution 20–50×, making timing meaningless. Use these tools for races and lock ordering; use a native build to verify timing.",
+    "Helgrind has detected a race and is deliberately delaying threads to demonstrate it.",
+    "Your monitor's poll interval needs to be increased when running under Valgrind."
+  ],
+  correct: 1,
+  explain: "Right. Race detection and timing verification are separate tests requiring separate builds — worth saying out loud if an evaluator runs Helgrind and points at your timestamps."
+});
+renderQuiz(document.getElementById('ch5-quiz1'), {
+  q: "Your coders loop on `while (!sim->stop)` without holding the mutex. Name the two distinct problems.",
+  options: [
+    "There are none — a single int read is atomic on x86, so this is safe.",
+    "First, the compiler may legally hoist the read out of the loop (nothing tells it another thread can change the variable), turning it into an infinite loop. Second, an unsynchronized concurrent read/write is undefined behavior in C regardless of hardware, and Helgrind/TSan will report it — which the scale grades as 0.",
+    "Only that it's slightly slower than reading under the lock.",
+    "The stop flag must be declared volatile; there is no other issue."
+  ],
+  correct: 1,
+  explain: "Correct. Both problems are real and independent. The fix is free: your coders already lock that mutex to check dongle availability, so check stop in the same critical section."
+});
+renderQuiz(document.getElementById('ch6-quiz1'), {
+  q: "Your program prints the burnout line correctly, then hangs forever at 0% CPU. What's the bug?",
+  options: [
+    "A circular wait among the coder threads' dongle acquisitions.",
+    "The monitor used pthread_cond_signal instead of broadcast, so only one coder woke — the rest are still in cond_wait and will never return, so pthread_join waits on them forever. The fix is broadcast plus including the stop flag in every coder's wait predicate.",
+    "The burnout line itself deadlocked on the log mutex.",
+    "A memory leak exhausted the heap during shutdown."
+  ],
+  correct: 1,
+  explain: "Right — this is the deadlock most Codexion implementations actually hit, and it lives in shutdown, not the coder logic. GDB shows it instantly: threads in cond_wait, main in pthread_join."
+});
+renderQuiz(document.getElementById('ch7-quiz1'), {
+  q: "The evaluator asks you to change the fifo scheduler to lifo. What does it say about your design if this takes more than a handful of lines?",
+  options: [
+    "Nothing — the recode is expected to be a substantial rewrite.",
+    "That your ordering policy isn't isolated in your heap's comparison logic but is smeared across your coder routine — meaning you didn't separate policy from mechanism. The scale explicitly checks that the change is made in the scheduler/queue logic itself, not superficially.",
+    "That you should have used semaphores instead of condition variables.",
+    "That your heap implementation is too efficient to modify safely."
+  ],
+  correct: 1,
+  explain: "Correct. The recode is really a test of whether your arbitration policy lives in one place. If it does, it's a two-line change you make calmly; if not, you're rewriting under pressure."
+});
+</script>
+
+</body>
+</html>

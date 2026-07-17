@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codexion Course 2: Thread Internals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f14; --bg-elev:#12151c; --bg-card:#171b24; --border:#252b38;
+  --text:#e7e9ee; --text-dim:#9aa3b5; --text-faint:#5c6478;
+  --accent-take:#5ee6ff;   /* has taken a dongle */
+  --accent-compile:#4f8cff; /* compiling */
+  --accent-debug:#ffb454;   /* debugging */
+  --accent-refactor:#b98eff;/* refactoring */
+  --accent-burnout:#ff5470; /* burned out */
+  --mono:'IBM Plex Mono', monospace;
+  --sans:'Inter', sans-serif;
+  --radius:10px;
+}
+html[data-theme="light"]{
+  --bg:#f5f6f8; --bg-elev:#ffffff; --bg-card:#ffffff; --border:#dde1e8;
+  --text:#191c22; --text-dim:#565f70; --text-faint:#8890a0;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  line-height:1.65; font-size:16px; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent-compile);}
+code, .mono{font-family:var(--mono);}
+
+/* ---------- Progress bar ---------- */
+#progress-bar{position:fixed; top:0; left:0; height:3px; background:linear-gradient(90deg,var(--accent-take),var(--accent-compile),var(--accent-debug),var(--accent-refactor)); width:0%; z-index:1000; transition:width .1s linear;}
+
+/* ---------- Layout ---------- */
+#app{display:flex; min-height:100vh;}
+#sidebar{
+  width:300px; flex-shrink:0; background:var(--bg-elev); border-right:1px solid var(--border);
+  position:sticky; top:0; height:100vh; overflow-y:auto; padding:20px 0 60px;
+}
+#sidebar .brand{padding:0 20px 16px; border-bottom:1px solid var(--border); margin-bottom:12px;}
+#sidebar .brand-title{font-family:var(--mono); font-weight:700; font-size:1.05rem; letter-spacing:.02em;}
+#sidebar .brand-sub{color:var(--text-faint); font-size:.78rem; margin-top:4px;}
+#theme-toggle{
+  margin-top:12px; background:var(--bg-card); border:1px solid var(--border); color:var(--text);
+  padding:6px 12px; border-radius:20px; font-size:.75rem; cursor:pointer; font-family:var(--mono);
+}
+.nav-chapter{border-bottom:1px solid var(--border);}
+.nav-chapter-head{
+  display:flex; align-items:center; gap:10px; padding:10px 20px; cursor:pointer; user-select:none;
+  font-size:.86rem; color:var(--text-dim); transition:color .15s;
+}
+.nav-chapter-head:hover{color:var(--text);}
+.nav-chapter-head .num{font-family:var(--mono); color:var(--text-faint); font-size:.75rem; width:20px; flex-shrink:0;}
+.nav-chapter-head .arrow{margin-left:auto; transition:transform .2s; font-size:.7rem; color:var(--text-faint);}
+.nav-chapter.open .arrow{transform:rotate(90deg);}
+.nav-sections{max-height:0; overflow:hidden; transition:max-height .25s ease;}
+.nav-chapter.open .nav-sections{max-height:500px;}
+.nav-sections a{
+  display:block; padding:6px 20px 6px 50px; font-size:.8rem; color:var(--text-faint);
+  text-decoration:none; border-left:2px solid transparent;
+}
+.nav-sections a:hover, .nav-sections a.active{color:var(--accent-compile); border-left-color:var(--accent-compile);}
+
+#main{flex:1; min-width:0; max-width:900px; margin:0 auto; padding:60px 48px 160px;}
+
+/* ---------- Hero ---------- */
+.hero{padding:20px 0 50px; border-bottom:1px solid var(--border); margin-bottom:50px;}
+.hero-eyebrow{font-family:var(--mono); font-size:.78rem; color:var(--accent-take); letter-spacing:.08em; text-transform:uppercase; margin-bottom:14px;}
+.hero h1{font-family:var(--mono); font-size:2.4rem; font-weight:700; line-height:1.15; margin-bottom:16px;}
+.hero p.lead{color:var(--text-dim); font-size:1.08rem; max-width:640px; margin-bottom:32px;}
+.legend{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:36px;}
+.legend .chip{
+  display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:.76rem;
+  padding:6px 12px; border-radius:20px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-dim);
+}
+.legend .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+
+/* ---------- Chapter content ---------- */
+.chapter{margin-bottom:90px; scroll-margin-top:20px;}
+.chapter-label{font-family:var(--mono); color:var(--text-faint); font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px;}
+.chapter h2{font-family:var(--mono); font-size:1.9rem; margin-bottom:26px; padding-bottom:16px; border-bottom:1px solid var(--border);}
+.section{scroll-margin-top:20px; margin-bottom:44px;}
+.section h3{font-size:1.25rem; margin-bottom:14px; font-weight:700;}
+.section h4{font-size:1.02rem; margin:20px 0 10px; font-weight:700; color:var(--text-dim);}
+.section p{margin-bottom:14px; max-width:70ch;}
+.section ul, .section ol{margin:0 0 14px 22px;}
+.section li{margin-bottom:6px;}
+
+.why-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-take);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.why-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-take); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.codexion-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-refactor);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.codexion-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-refactor); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.analogy-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-debug);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.analogy-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+pre{
+  background:#08090c; border:1px solid var(--border); border-radius:8px; padding:16px 18px;
+  overflow-x:auto; margin:16px 0; font-size:.86rem; line-height:1.55;
+}
+html[data-theme="light"] pre{background:#f0f1f4;}
+pre code{font-family:var(--mono); color:#c8ccd8;}
+html[data-theme="light"] pre code{color:#2b2f3a;}
+.log-line{display:block;}
+.log-ts{color:var(--text-faint);}
+.log-take{color:var(--accent-take);}
+.log-compile{color:var(--accent-compile);}
+.log-debug{color:var(--accent-debug);}
+.log-refactor{color:var(--accent-refactor);}
+.log-burnout{color:var(--accent-burnout); font-weight:600;}
+
+.expandable{border:1px solid var(--border); border-radius:8px; margin:16px 0; overflow:hidden;}
+.expandable summary{
+  padding:13px 18px; cursor:pointer; font-weight:600; font-size:.92rem; background:var(--bg-card);
+  list-style:none; display:flex; align-items:center; gap:10px;
+}
+.expandable summary::-webkit-details-marker{display:none;}
+.expandable summary::before{content:'+'; font-family:var(--mono); color:var(--accent-compile); font-weight:700;}
+.expandable[open] summary::before{content:'−';}
+.expandable .body{padding:16px 18px; border-top:1px solid var(--border);}
+
+svg{max-width:100%; height:auto;}
+.diagram-wrap{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:24px; margin:20px 0; text-align:center;}
+.diagram-caption{font-size:.82rem; color:var(--text-faint); margin-top:10px; font-family:var(--mono);}
+
+/* ---------- Quiz ---------- */
+.quiz{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:22px 24px; margin:20px 0;}
+.quiz .q-title{font-family:var(--mono); font-size:.75rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px;}
+.quiz .q-text{font-weight:600; margin-bottom:14px;}
+.quiz .opts{display:flex; flex-direction:column; gap:8px;}
+.quiz button.opt{
+  text-align:left; padding:11px 14px; background:var(--bg-elev); border:1px solid var(--border); border-radius:7px;
+  color:var(--text); cursor:pointer; font-family:var(--sans); font-size:.92rem; transition:.15s;
+}
+.quiz button.opt:hover{border-color:var(--accent-compile);}
+.quiz button.opt.correct{border-color:#3ecf8e; background:rgba(62,207,142,.12);}
+.quiz button.opt.wrong{border-color:var(--accent-burnout); background:rgba(255,84,112,.12);}
+.quiz .feedback{margin-top:12px; font-size:.88rem; color:var(--text-dim); display:none;}
+.quiz .feedback.show{display:block;}
+
+/* ---------- Exercises ---------- */
+.exercises{background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:24px 26px; margin-top:30px;}
+.exercises h4{font-family:var(--mono); font-size:.8rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;}
+.ex-group{margin-top:16px;}
+.ex-group .ex-label{font-size:.78rem; color:var(--accent-take); font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;}
+.ex-group ol{margin-left:20px;}
+.ex-group li{margin-bottom:8px; color:var(--text-dim); font-size:.94rem;}
+
+table{width:100%; border-collapse:collapse; margin:16px 0; font-size:.9rem;}
+th,td{border:1px solid var(--border); padding:8px 12px; text-align:left;}
+th{background:var(--bg-card); font-family:var(--mono); font-size:.78rem; text-transform:uppercase;}
+
+.nav-footer{display:flex; justify-content:space-between; margin-top:60px; padding-top:24px; border-top:1px solid var(--border);}
+.nav-footer a{font-family:var(--mono); font-size:.85rem; text-decoration:none; color:var(--text-dim); display:flex; flex-direction:column;}
+.nav-footer a:hover{color:var(--accent-compile);}
+.nav-footer .lbl{font-size:.7rem; color:var(--text-faint); text-transform:uppercase; margin-bottom:4px;}
+
+@media (max-width:860px){
+  #sidebar{position:fixed; left:-300px; z-index:900; transition:left .2s; box-shadow:0 0 40px rgba(0,0,0,.4);}
+  #sidebar.open{left:0;}
+  #main{padding:60px 20px 120px; max-width:100%;}
+  #menu-btn{display:flex !important;}
+}
+#menu-btn{
+  display:none; position:fixed; top:16px; left:16px; z-index:950; width:40px; height:40px;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:8px; color:var(--text);
+  align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem;
+}
+</style>
+</head>
+<body>
+<div id="progress-bar"></div>
+<div id="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</div>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="brand">
+      <div class="brand-title">// codexion — course 2</div>
+      <div class="brand-sub">Thread internals</div>
+      <button id="theme-toggle" onclick="toggleTheme()">☀ light mode</button>
+    </div>
+    <div id="nav-list"></div>
+  </nav>
+
+  <main id="main">
+
+    <section class="hero">
+      <div class="hero-eyebrow">Course 2 of the Codexion series</div>
+      <h1>Thread internals</h1>
+      <p class="lead">Course 1 ended with "threads share memory, processes don't." This course opens up exactly what a thread <em>is</em>, mechanically: what <code>pthread_create()</code> does under the hood, the <code>clone()</code> syscall it rests on, the kernel object (TCB) that represents your coder thread, the private storage (TLS) and stack and register state that keep five coder threads from tripping over each other, how threads are identified, and the states each one moves through from birth to burnout — or, hopefully, to a clean exit.</p>
+      <div class="legend">
+        <div class="chip"><span class="dot" style="background:var(--accent-take)"></span> has taken a dongle</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-compile)"></span> compiling</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-debug)"></span> debugging</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-refactor)"></span> refactoring</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-burnout)"></span> burned out</div>
+      </div>
+      <div class="diagram-wrap" id="hero-diagram"></div>
+      <div class="diagram-caption">The Codexion hub: N coders in a circle, N dongles between them, one shared Quantum Compiler in the center.</div>
+    </section>
+
+    <div id="chapters-root">
+
+    <!-- ============ CHAPTER 1 ============ -->
+    <section class="chapter" id="ch1">
+      <div class="chapter-label">Chapter 01</div>
+      <h2>pthread_create()</h2>
+
+      <div class="section" id="ch1-s0">
+        <h3>1.1 &nbsp;The API surface</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Codexion needs 5 (or 200) independent flows of execution, each cycling compile → debug → refactor, all sharing dongle state. <code>pthread_create()</code> is POSIX's answer to "give me a new, independently-scheduled thing that runs this function, inside my existing process." One call, four parameters, and an entire coder thread comes alive.</div>
+        <pre><code>int pthread_create(pthread_t *thread,
+                    const pthread_attr_t *attr,
+                    void *(*start_routine)(void *),
+                    void *arg);</code></pre>
+        <table>
+          <tr><th>Parameter</th><th>Role</th></tr>
+          <tr><td><code>thread</code></td><td>Output — filled with an opaque handle identifying the new thread (Chapter 6 covers exactly what this handle is and isn't)</td></tr>
+          <tr><td><code>attr</code></td><td>Optional attributes: custom stack size, detached vs. joinable, scheduling policy — <code>NULL</code> means "sane defaults"</td></tr>
+          <tr><td><code>start_routine</code></td><td>The function this new thread will run — for Codexion, something like <code>void *coder_routine(void *arg)</code></td></tr>
+          <tr><td><code>arg</code></td><td>A single <code>void*</code> passed to <code>start_routine</code> — this is the thread's <em>only</em> guaranteed private input channel</td></tr>
+        </table>
+        <p>Return value: <code>0</code> on success, a nonzero error code on failure — notably, unlike most POSIX calls, it does <em>not</em> use <code>errno</code>; it returns the error code directly.</p>
+      </div>
+
+      <div class="section" id="ch1-s1">
+        <h3>1.2 &nbsp;What happens the instant you call it</h3>
+        <p>Underneath that four-parameter call, roughly this sequence runs, entirely inside glibc's NPTL (Native POSIX Thread Library) before the kernel is even involved:</p>
+        <ol>
+          <li>Allocate a new stack region for the thread (via <code>mmap()</code>), sized per <code>attr</code> or a sane default (commonly 8MB, though only pages actually touched become resident, Course 1's demand-paging idea).</li>
+          <li>Place a guard page at the end of that stack (Chapter 5).</li>
+          <li>Build an initial machine-state layout on that stack so that when the new thread starts executing, it will effectively call <code>start_routine(arg)</code>.</li>
+          <li>Call the <code>clone()</code> syscall (Chapter 2) with a specific flag combination telling the kernel "create a new schedulable entity that shares my address space, using this stack, starting at this entry point."</li>
+          <li>The kernel creates the new task, marks it runnable, and <code>pthread_create()</code> returns to the calling thread — often before the new thread has actually run a single instruction; the two threads race from this point on, genuinely concurrent.</li>
+        </ol>
+        <div class="why-box"><span class="tag">Why "returns before the new thread runs" matters</span>
+        There is no guarantee coder thread 3's first instruction executes before coder thread 4 is even created, or before the thread that called <code>pthread_create()</code> five times in a loop finishes that loop. This is precisely why Codexion's "coder N sits between coder N-1 and coder N+1" seating and dongle assignment must be fully decided and passed into each thread's argument struct <em>before</em> any thread starts running — you cannot rely on creation order implying execution order.</div>
+      </div>
+
+      <div class="section" id="ch1-s2">
+        <h3>1.3 &nbsp;Passing arguments into a new thread</h3>
+        <p>Because <code>arg</code> is a single <code>void*</code>, the standard pattern for handing a new thread more than one piece of data — its coder number, pointers to its left/right dongles, a pointer to shared scheduler state — is to <code>malloc()</code> (or otherwise durably allocate) a small context struct and pass its address:</p>
+        <pre><code>typedef struct {
+    int             id;
+    struct dongle   *left, *right;
+    struct sched_q  *queue;
+} coder_ctx_t;
+
+coder_ctx_t *ctx = malloc(sizeof(*ctx));
+ctx-&gt;id = i;
+ctx-&gt;left = &amp;dongles[i];
+ctx-&gt;right = &amp;dongles[(i + 1) % n];
+ctx-&gt;queue = shared_queue;
+pthread_create(&amp;tids[i], NULL, coder_routine, ctx);</code></pre>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — a classic bug</span>
+        A very common mistake: passing <code>&amp;i</code> (the address of a shared loop variable) directly into <code>pthread_create()</code> instead of a per-thread heap-allocated copy. By the time coder thread 3 actually reads <code>*arg</code>, the loop may have already incremented <code>i</code> to 4 or 5 — every coder thread ends up reading the same, final, wrong value. This is exactly the kind of "no global variables" discipline the subject enforces: give each thread its own, independently allocated argument, never a shared loop counter's address.</div>
+        <div id="ch1-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 1 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why does <code>pthread_create()</code> return an error code directly instead of setting <code>errno</code> like most POSIX functions?</li>
+          <li>What breaks if you pass the address of a shared loop counter <code>i</code> into all 5 calls to <code>pthread_create()</code> instead of a per-thread allocated struct?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Is it guaranteed that coder thread 1 starts running before coder thread 2 is created?" Answer using what pthread_create() actually guarantees about ordering.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 2 ============ -->
+    <section class="chapter" id="ch2">
+      <div class="chapter-label">Chapter 02</div>
+      <h2>clone(): the syscall underneath</h2>
+
+      <div class="section" id="ch2-s0">
+        <h3>2.1 &nbsp;Why Linux has no separate 'thread' syscall</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Many operating systems textbooks describe "process creation" and "thread creation" as fundamentally different kernel operations. Linux took a different, more general design: there is exactly one syscall for creating any new schedulable flow of execution, <code>clone()</code>, and what makes the result "a thread" versus "a process" is entirely which resources you tell it to share versus copy.</div>
+        <p>In fact, on Linux, even <code>fork()</code> is implemented as a call to <code>clone()</code> with a particular flag set (mostly nothing shared — separate address space, separate file descriptor table by default, aside from copy-on-write memory pages). <code>pthread_create()</code> calls the exact same underlying syscall, just with a very different flag set.</p>
+      </div>
+
+      <div class="section" id="ch2-s1">
+        <h3>2.2 &nbsp;The flags that make a thread a thread</h3>
+        <pre><code>clone(fn, child_stack,
+      CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND |
+      CLONE_THREAD | CLONE_SYSVSEM | CLONE_SETTLS |
+      CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID,
+      arg, &amp;parent_tid, tls, &amp;child_tid);</code></pre>
+        <table>
+          <tr><th>Flag</th><th>Effect</th></tr>
+          <tr><td><code>CLONE_VM</code></td><td>Share the entire virtual address space — the single flag that makes the heap shared, and therefore makes this a "thread" rather than an isolated process</td></tr>
+          <tr><td><code>CLONE_FS</code></td><td>Share filesystem info (cwd, umask)</td></tr>
+          <tr><td><code>CLONE_FILES</code></td><td>Share the file descriptor table</td></tr>
+          <tr><td><code>CLONE_SIGHAND</code></td><td>Share signal handler dispositions</td></tr>
+          <tr><td><code>CLONE_THREAD</code></td><td>Join the same thread group — same PID as reported by <code>getpid()</code></td></tr>
+          <tr><td><code>CLONE_SETTLS</code></td><td>Install a fresh Thread-Local Storage area for the new thread (Chapter 4)</td></tr>
+          <tr><td><code>CLONE_CHILD_CLEARTID</code></td><td>On exit, kernel zeroes a userspace word and futex-wakes it — the actual mechanism <code>pthread_join()</code> waits on</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch2-s2">
+        <h3>2.3 &nbsp;clone() vs. fork(), side by side</h3>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 460 180" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="20" width="180" height="60" rx="6" fill="none" stroke="var(--accent-refactor)" stroke-width="1.5"/>
+            <text x="110" y="45" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--text)">fork()</text>
+            <text x="110" y="62" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">clone() with almost nothing shared</text>
+            <rect x="260" y="20" width="180" height="60" rx="6" fill="none" stroke="var(--accent-compile)" stroke-width="1.5"/>
+            <text x="350" y="45" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--text)">pthread_create()</text>
+            <text x="350" y="62" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">clone() with CLONE_VM|FILES|...</text>
+            <text x="230" y="60" text-anchor="middle" font-family="IBM Plex Mono" font-size="20" fill="var(--accent-take)">=</text>
+            <text x="230" y="115" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text-dim)">Same underlying syscall.</text>
+            <text x="230" y="132" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text-dim)">Different flags, different result: isolated process vs. sibling thread.</text>
+          </svg>
+          <div class="diagram-caption">There is no separate kernel concept of "thread creation" — it's clone() either way.</div>
+        </div>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is why Course 1's process-isolation discussion and this course's thread discussion aren't two unrelated topics — they're two settings of the exact same dial. Codexion's mandate to use <code>pthread_create()</code> (rather than, say, forking 5 coder processes) is a mandate to flip that dial toward "share everything except stack/registers/TLS," because that's the resource-sharing profile the dongle-arbitration problem actually needs.</div>
+        <div id="ch2-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 2 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Name the one clone() flag that, if omitted, would turn a "thread creation" call into something behaving like a process fork instead.</li>
+          <li>Why is CLONE_CHILD_CLEARTID relevant to how pthread_join() is implemented?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Are Linux threads and processes different kernel object types?" Answer precisely: same task_struct type, different clone() flags at creation time.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 3 ============ -->
+    <section class="chapter" id="ch3">
+      <div class="chapter-label">Chapter 03</div>
+      <h2>The Thread Control Block (TCB)</h2>
+
+      <div class="section" id="ch3-s0">
+        <h3>3.1 &nbsp;What a TCB actually holds</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        The scheduler needs to pause a coder thread mid-execution, run four other threads for a while, and later resume that exact same coder thread as if nothing happened — same register values, same stack position, same program counter. Somewhere, the kernel needs a place to <em>park</em> all of that state while the thread isn't actually running. That place is the <strong>Thread Control Block (TCB)</strong>.</div>
+        <p>Conceptually, a TCB holds:</p>
+        <ul>
+          <li>Saved CPU register values (general-purpose registers, stack pointer, program counter, flags) — frozen exactly as they were the instant this thread was last paused</li>
+          <li>Scheduling info: thread state (Ready/Running/Blocked/Terminated — Chapter 6), priority, scheduling class</li>
+          <li>A pointer to the thread's stack</li>
+          <li>A pointer to the thread's TLS area (Chapter 4)</li>
+          <li>Thread identity (Chapter 6) and a pointer back to the owning process's shared resources (address space, file descriptors)</li>
+        </ul>
+      </div>
+
+      <div class="section" id="ch3-s1">
+        <h3>3.2 &nbsp;task_struct: Linux's real TCB</h3>
+        <p>Linux doesn't have a struct literally named "TCB" — the concept is realized by (a subset of the fields inside) <code>task_struct</code>, the same universal schedulable-entity struct Course 1 mentioned exists for both processes and threads. The TCB-relevant fields include:</p>
+        <pre><code>struct task_struct {
+    long              state;       // TASK_RUNNING, TASK_INTERRUPTIBLE, ...
+    struct thread_struct thread;   // saved registers, arch-specific
+    void             *stack;       // pointer to this task's kernel stack
+    struct mm_struct *mm;          // shared address space (same ptr across threads)
+    pid_t             pid, tgid;   // thread id, thread-group (process) id
+    struct sched_entity se;        // vruntime & scheduling bookkeeping
+    /* ... hundreds more fields ... */
+};</code></pre>
+        <div class="why-box"><span class="tag">The key distinction to hold onto</span>
+        <code>thread.regs</code>, <code>stack</code>, <code>pid</code>, and <code>state</code> are unique per thread — this is the "TCB" part. <code>mm</code> is shared by every thread in the same process — this is the part that makes threads threads. One struct, cleanly split between "what's mine alone" and "what I share with my siblings."</div>
+      </div>
+
+      <div class="section" id="ch3-s2">
+        <h3>3.3 &nbsp;One process, many TCBs</h3>
+        <p>When <code>codexion</code> spawns 5 coder threads and 1 monitor thread, the kernel creates 6 separate <code>task_struct</code>s (6 TCBs) — one per thread — all pointing at the same <code>mm_struct</code>, but each with its own independent register state, stack pointer, and scheduling state. <code>ps -eLf</code> or <code>ps -T -p &lt;pid&gt;</code> shows you exactly this: one PID column, six distinct LWP (thread) rows.</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is the concrete kernel-level answer to "how can the scheduler run coder 2 while coder 4 is blocked on a mutex, in the same process": each has its own TCB carrying its own independent state field — one can be <code>TASK_RUNNING</code> while another is <code>TASK_INTERRUPTIBLE</code>, simultaneously, because they are, structurally, separate schedulable objects that merely happen to share one address space.</div>
+        <div id="ch3-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 3 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Which task_struct field is shared identically across all of Codexion's coder threads, and which fields are guaranteed to differ between every thread?</li>
+          <li>Why must saved register state live in the TCB rather than, say, on the thread's own stack?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Show me, using task_struct fields, why two coder threads can be in different scheduling states at the same instant despite running the same compiled function." Reference per-thread `state` vs. shared `mm`.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 4 ============ -->
+    <section class="chapter" id="ch4">
+      <div class="chapter-label">Chapter 04</div>
+      <h2>Thread Local Storage (TLS)</h2>
+
+      <div class="section" id="ch4-s0">
+        <h3>4.1 &nbsp;The problem TLS solves</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        Threads share the heap and globals by design (Chapter 2) — but sometimes you genuinely need a variable that behaves like a global (same name, accessible from anywhere in the thread's call stack, persists across function calls) while still being <em>private per thread</em>. The canonical example: <code>errno</code>. If <code>errno</code> were a true global, one coder thread's failed syscall would stomp on every other coder thread's error-reporting. <strong>Thread Local Storage</strong> gives you "global-like convenience, per-thread isolation."</div>
+      </div>
+
+      <div class="section" id="ch4-s1">
+        <h3>4.2 &nbsp;How __thread variables actually work</h3>
+        <p>You can declare your own TLS variables explicitly:</p>
+        <pre><code>__thread int compiles_done = 0;   // GNU extension
+// or, standard C11:
+_Thread_local int compiles_done = 0;</code></pre>
+        <p>Mechanically, on x86-64 Linux: each thread's TCB gets a small private memory block set up at thread-creation time (as part of <code>clone(CLONE_SETTLS, ...)</code>), and the CPU's <code>%fs</code> segment register is loaded with the base address of <em>this thread's</em> block. Every access to a <code>__thread</code> variable compiles down to an address computed relative to <code>%fs</code>, e.g. <code>mov %fs:-0x8, %eax</code>. Same instruction bytes for every thread — but <code>%fs</code>'s base differs per thread, so the same instruction resolves to different physical memory depending on who's executing it.</p>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 440 160" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="20" width="180" height="50" rx="6" fill="none" stroke="var(--accent-compile)" stroke-width="1.5"/>
+            <text x="110" y="42" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">Coder 2</text>
+            <text x="110" y="58" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">%fs → TLS block A</text>
+            <rect x="240" y="20" width="180" height="50" rx="6" fill="none" stroke="var(--accent-debug)" stroke-width="1.5"/>
+            <text x="330" y="42" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">Coder 4</text>
+            <text x="330" y="58" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">%fs → TLS block B</text>
+            <text x="220" y="105" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text-dim)">mov %fs:errno_offset, %eax</text>
+            <text x="220" y="122" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text-dim)">— identical instruction, different physical memory per thread</text>
+          </svg>
+          <div class="diagram-caption">%fs is one of the registers switch_to() reloads on every context switch, so TLS "follows" the running thread automatically.</div>
+        </div>
+      </div>
+
+      <div class="section" id="ch4-s2">
+        <h3>4.3 &nbsp;errno as the canonical example</h3>
+        <p>glibc's <code>errno</code> is, itself, implemented as a macro that expands to a function call or TLS access returning a per-thread <code>int</code> — not a plain global <code>int errno;</code> like in old single-threaded Unix. This is precisely why every one of Codexion's coder threads can independently call syscalls that might fail (a <code>pthread_mutex_lock</code> misuse, an unlikely <code>gettimeofday</code> error) without any risk of one thread's error code clobbering another's — despite all of them executing the exact same compiled <code>.text</code>.</p>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        You likely won't declare your own <code>__thread</code> variables in Codexion — heap-allocated per-coder context structs (Chapter 1) cover that need more explicitly and traceably. But understanding TLS is what lets you correctly explain, if asked, why calling a possibly-failing libc function from multiple coder threads simultaneously is safe with respect to <code>errno</code> specifically, even without any mutex protecting it.</div>
+        <div id="ch4-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 4 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why isn't a heap-allocated per-coder struct a substitute for TLS in every case — what does TLS give you that passing an explicit pointer doesn't?</li>
+          <li>Which register holds the base address of a thread's TLS block on x86-64 Linux, and when is that register's value updated?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"If errno were a plain global int, what specific bug would appear in Codexion the first time two coder threads both hit a failing syscall at nearly the same moment?" Describe the clobbering scenario precisely.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 5 ============ -->
+    <section class="chapter" id="ch5">
+      <div class="chapter-label">Chapter 05</div>
+      <h2>Thread stacks &amp; registers</h2>
+
+      <div class="section" id="ch5-s0">
+        <h3>5.1 &nbsp;Why every thread needs its own stack</h3>
+        <div class="why-box"><span class="tag">Why this exists</span>
+        A stack holds local variables, function call frames, and return addresses — fundamentally, "where was I in this function, and what do I do when it returns." If two coder threads shared one stack, coder 2 calling <code>take_dongle()</code> while coder 4 is simultaneously three functions deep inside its own <code>take_dongle()</code> call would scribble over each other's local variables and return addresses within microseconds. Each thread needs a completely private stack precisely because "where am I in my own call chain" must never be shared, even though the heap deliberately is.</div>
+      </div>
+
+      <div class="section" id="ch5-s1">
+        <h3>5.2 &nbsp;Guard pages &amp; stack overflow</h3>
+        <p>glibc allocates each pthread's stack via <code>mmap()</code> and places a <strong>guard page</strong> — mapped <code>PROT_NONE</code>, meaning any access faults immediately — right past the end the stack grows toward. This turns "silent heap/adjacent-stack corruption from an overflowing stack" into "immediate, loud segfault at the exact moment of overflow," which is a far easier bug to diagnose (and, for Codexion, a far more honest failure mode given the subject's zero-tolerance rule for unexpected crashes: better to crash cleanly and immediately at the true cause than corrupt memory and crash confusingly somewhere else later).</p>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 380 190" xmlns="http://www.w3.org/2000/svg">
+            <rect x="80" y="20" width="140" height="25" fill="none" stroke="var(--accent-burnout)" stroke-width="1.5" stroke-dasharray="3 2"/>
+            <text x="150" y="37" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--accent-burnout)">guard page (PROT_NONE)</text>
+            <rect x="80" y="45" width="140" height="100" fill="none" stroke="var(--accent-refactor)" stroke-width="1.5"/>
+            <text x="150" y="65" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">coder 3's stack</text>
+            <text x="150" y="80" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">local vars, call frames</text>
+            <text x="150" y="130" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-faint)">grows toward guard page ↑</text>
+          </svg>
+          <div class="diagram-caption">Deep or unbounded recursion (e.g. a buggy heap-sift) hits the guard page and faults immediately.</div>
+        </div>
+      </div>
+
+      <div class="section" id="ch5-s2">
+        <h3>5.3 &nbsp;Registers: what's private, what changes on a switch</h3>
+        <p>Registers are, by hardware definition, singular per core — there's exactly one physical <code>%rax</code>, one <code>%rsp</code>, per core, not one per thread. What makes each thread's register state "private" is that the kernel saves the full register set into that thread's TCB the instant it's paused, and restores a completely different thread's saved values when it resumes. From a coder thread's own perspective, its registers are entirely its own; the underlying hardware is shared and swapped invisibly.</p>
+        <ul>
+          <li>General-purpose registers, stack pointer, program counter, flags — saved/restored on every context switch</li>
+          <li><code>%fs</code> base (TLS pointer, Chapter 4) — reloaded so per-thread variables resolve correctly after the switch</li>
+          <li>Floating-point/vector registers — often saved lazily, only if the outgoing thread actually used them, since not every thread touches floating point</li>
+        </ul>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        This is why "which coder am I" can never be answered by looking at a CPU register directly — registers are a hardware resource borrowed and returned by whichever thread happens to be scheduled onto a core at a given instant. The only reliable way a coder thread knows its own identity is through data explicitly passed to it (the <code>arg</code> pointer from Chapter 1) or through its thread ID (Chapter 6) — never through some register the OS conveniently sets aside "for coder 3 specifically," because no such register exists.</div>
+        <div id="ch5-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 5 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why does hitting a stack guard page cause an immediate segfault rather than silent corruption, and why is that the preferable failure mode for a project that penalizes unexpected crashes?</li>
+          <li>Are registers themselves "private" to a thread in any physical sense, or is the privacy an illusion maintained by save/restore? Explain.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 6 ============ -->
+    <section class="chapter" id="ch6">
+      <div class="chapter-label">Chapter 06</div>
+      <h2>Thread IDs, lifecycle &amp; states</h2>
+
+      <div class="section" id="ch6-s0">
+        <h3>6.1 &nbsp;pthread_t vs. the kernel TID</h3>
+        <div class="why-box"><span class="tag">Why two different IDs exist</span>
+        POSIX threads are meant to be portable across many operating systems, not all of which implement threads the way Linux does internally. So POSIX defines its own abstract, opaque identifier type, <code>pthread_t</code>, guaranteed only to be comparable via <code>pthread_equal()</code> — not necessarily an integer, not necessarily meaningful outside the pthread library. Linux, separately and specifically, also assigns every thread (every <code>task_struct</code>) a genuine kernel-level integer ID, retrievable via <code>gettid()</code> (a raw syscall, not part of POSIX).</div>
+        <table>
+          <tr><th></th><th><code>pthread_t</code></th><th>Kernel TID (<code>gettid()</code>)</th></tr>
+          <tr><td>Scope</td><td>Meaningful only within your process, via the pthread library</td><td>A real, globally unique-at-a-point-in-time kernel integer, visible to tools like <code>ps -T</code></td></tr>
+          <tr><td>Portability</td><td>POSIX-standard, portable across POSIX-compliant systems</td><td>Linux-specific</td></tr>
+          <tr><td>Typical Codexion use</td><td>Passed to <code>pthread_join()</code> to wait for a specific coder thread to finish</td><td>Essentially never needed directly — your own logging already tracks "coder N" explicitly</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch6-s1">
+        <h3>6.2 &nbsp;Birth to death: the thread lifecycle</h3>
+        <p>A coder thread's life, end to end:</p>
+        <ol>
+          <li><strong>Creation</strong> — <code>pthread_create()</code> returns a <code>pthread_t</code>; the thread is now Ready/Running, executing <code>coder_routine</code>.</li>
+          <li><strong>Execution</strong> — cycles through Running and Blocked states (Chapter 6.3) as it compiles, waits for dongles, debugs, and refactors.</li>
+          <li><strong>Termination</strong> — the thread function returns, or the thread calls <code>pthread_exit()</code> explicitly. Either way, the thread is now "terminated" but its resources (exit status, stack) aren't necessarily reclaimed yet.</li>
+          <li><strong>Joining (or detaching)</strong> — another thread calls <code>pthread_join(tid, NULL)</code>, which blocks until that specific thread terminates and then reclaims its resources; alternatively, a thread created "detached" has its resources reclaimed automatically on exit, with no other thread able to join it.</li>
+        </ol>
+        <div class="why-box"><span class="tag">Why joining matters even for a program that "runs until burnout"</span>
+        A thread that terminates but is never joined (and wasn't created detached) leaks its kernel-held resources for the life of the process — a "zombie" thread, conceptually parallel to a zombie process. Codexion's monitor thread needs to cleanly signal all coder threads to stop (on burnout or on reaching <code>number_of_compiles_required</code>) and then <code>pthread_join()</code> every one of them before the program exits, both for a clean shutdown and to avoid the memory-leak class of bug the subject explicitly grades on.</div>
+      </div>
+
+      <div class="section" id="ch6-s2">
+        <h3>6.3 &nbsp;Ready, Running, Blocked, Terminated</h3>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 460 200" xmlns="http://www.w3.org/2000/svg">
+            <rect x="10" y="80" width="90" height="40" rx="6" fill="none" stroke="var(--accent-take)" stroke-width="1.5"/>
+            <text x="55" y="104" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--text)">Ready</text>
+            <rect x="140" y="20" width="90" height="40" rx="6" fill="none" stroke="var(--accent-compile)" stroke-width="1.5"/>
+            <text x="185" y="44" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--text)">Running</text>
+            <rect x="140" y="140" width="90" height="40" rx="6" fill="none" stroke="var(--accent-debug)" stroke-width="1.5"/>
+            <text x="185" y="164" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--text)">Blocked</text>
+            <rect x="290" y="80" width="90" height="40" rx="6" fill="none" stroke="var(--accent-refactor)" stroke-width="1.5"/>
+            <text x="335" y="104" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--text)">Terminated</text>
+            <line x1="100" y1="90" x2="140" y2="45" stroke="var(--text-faint)"/>
+            <line x1="230" y1="45" x2="150" y2="90" stroke="var(--text-faint)"/>
+            <line x1="185" y1="60" x2="185" y2="140" stroke="var(--text-faint)"/>
+            <line x1="150" y1="150" x2="100" y2="115" stroke="var(--text-faint)"/>
+            <line x1="230" y1="40" x2="290" y2="90" stroke="var(--text-faint)"/>
+          </svg>
+          <div class="diagram-caption">Scheduler moves Ready→Running; a blocking call moves Running→Blocked; wakeup moves Blocked→Ready; return/pthread_exit moves Running→Terminated.</div>
+        </div>
+        <table>
+          <tr><th>State</th><th>Codexion moment</th></tr>
+          <tr><td>Ready</td><td>Coder has both dongles and is about to compile, but hasn't been given a core yet</td></tr>
+          <tr><td>Running</td><td>Actually executing on a core — compiling, or running the C code that logs "is debugging"/"is refactoring" and then sleeps</td></tr>
+          <tr><td>Blocked</td><td>Waiting inside <code>pthread_mutex_lock()</code> for a dongle, or inside <code>pthread_cond_wait()</code>/<code>pthread_cond_timedwait()</code> for availability to change</td></tr>
+          <tr><td>Terminated</td><td>Coder thread's routine has returned (program is stopping — burnout detected, or every coder hit <code>number_of_compiles_required</code>) and awaits <code>pthread_join()</code></td></tr>
+        </table>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        Every line in your log output is a snapshot of one thread's transition through exactly this state machine, filtered through Codexion's own domain vocabulary. "Has taken a dongle" is the moment a Blocked coder becomes Ready/Running again. "Burned out" is the monitor thread detecting a coder that should have transitioned back to Running (via re-acquiring dongles) but didn't, within the allotted time — a liveness failure expressed in exactly the state-machine terms this chapter describes.</div>
+        <div id="ch6-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 6 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why does POSIX define its own abstract pthread_t type instead of just using the kernel's TID directly?</li>
+          <li>What happens if a joinable thread terminates but nothing ever calls pthread_join() on it, and why does this matter for Codexion's "no leaks" requirement?</li>
+        </ol></div>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>"Trace a coder thread's exact state transitions from the moment it requests a dongle that's currently held, through acquiring it, to starting to compile." Use Ready/Running/Blocked precisely.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    </div><!-- /chapters-root -->
+
+  </main>
+</div>
+
+<script>
+/* ================= THEME ================= */
+function toggleTheme(){
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  document.getElementById('theme-toggle').textContent = isLight ? '☀ light mode' : '🌙 dark mode';
+}
+
+/* ================= PROGRESS BAR ================= */
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+});
+
+/* ================= HERO DIAGRAM (SVG, generated) ================= */
+(function(){
+  const N = 5, R = 110, cx=180, cy=150;
+  let coders = [], dongles = [];
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + i*(2*Math.PI/N);
+    coders.push({x: cx+R*Math.cos(a), y: cy+R*Math.sin(a), n:i+1});
+  }
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + (i+0.5)*(2*Math.PI/N);
+    dongles.push({x: cx+ (R-38)*Math.cos(a), y: cy+(R-38)*Math.sin(a)});
+  }
+  let svg = `<svg viewBox="0 0 360 320" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<circle cx="${cx}" cy="${cy}" r="34" fill="none" stroke="var(--accent-compile)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  svg += `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">QUANTUM</text>`;
+  svg += `<text x="${cx}" y="${cy+9}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">COMPILER</text>`;
+  dongles.forEach((d,i) => {
+    svg += `<rect x="${d.x-9}" y="${d.y-6}" width="18" height="12" rx="2" fill="var(--accent-take)" opacity="0.85"/>`;
+  });
+  coders.forEach(c => {
+    svg += `<circle cx="${c.x}" cy="${c.y}" r="20" fill="var(--bg-elev)" stroke="var(--accent-refactor)" stroke-width="2"/>`;
+    svg += `<text x="${c.x}" y="${c.y+4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" fill="var(--text)">${c.n}</text>`;
+  });
+  svg += `</svg>`;
+  document.getElementById('hero-diagram').innerHTML = svg;
+})();
+
+/* ================= QUIZ ENGINE ================= */
+function renderQuiz(container, q){
+  const div = document.createElement('div');
+  div.className = 'quiz';
+  div.innerHTML = `<div class="q-title">Check yourself</div><div class="q-text">${q.q}</div><div class="opts"></div><div class="feedback"></div>`;
+  const opts = div.querySelector('.opts');
+  q.options.forEach((opt, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.textContent = opt;
+    btn.onclick = () => {
+      const fb = div.querySelector('.feedback');
+      [...opts.children].forEach(b => b.disabled = true);
+      if(idx === q.correct){
+        btn.classList.add('correct');
+      } else {
+        btn.classList.add('wrong');
+        opts.children[q.correct].classList.add('correct');
+      }
+      fb.textContent = q.explain;
+      fb.classList.add('show');
+    };
+    opts.appendChild(btn);
+  });
+  container.appendChild(div);
+}
+</script>
+
+<script>
+/* ================= SIDEBAR NAV ================= */
+const chapterMeta = [
+  {n:1, title:"pthread_create()", sections:["The API surface","What happens the instant you call it","Passing arguments into a new thread"]},
+  {n:2, title:"clone(): the syscall underneath", sections:["Why Linux has no separate 'thread' syscall","The flags that make a thread a thread","clone() vs. fork(), side by side"]},
+  {n:3, title:"The Thread Control Block (TCB)", sections:["What a TCB actually holds","task_struct: Linux's real TCB","One process, many TCBs"]},
+  {n:4, title:"Thread Local Storage (TLS)", sections:["The problem TLS solves","How __thread variables actually work","errno as the canonical example"]},
+  {n:5, title:"Thread stacks & registers", sections:["Why every thread needs its own stack","Guard pages & stack overflow","Registers: what's private, what changes on a switch"]},
+  {n:6, title:"Thread IDs, lifecycle & states", sections:["pthread_t vs. the kernel TID","Birth to death: the thread lifecycle","Ready, Running, Blocked, Terminated"]},
+];
+const navList = document.getElementById('nav-list');
+chapterMeta.forEach(ch => {
+  const wrap = document.createElement('div');
+  wrap.className = 'nav-chapter';
+  const head = document.createElement('div');
+  head.className = 'nav-chapter-head';
+  head.innerHTML = `<span class="num">${String(ch.n).padStart(2,'0')}</span><span>${ch.title}</span><span class="arrow">›</span>`;
+  head.onclick = () => wrap.classList.toggle('open');
+  wrap.appendChild(head);
+  const secs = document.createElement('div');
+  secs.className = 'nav-sections';
+  ch.sections.forEach((s,i) => {
+    const a = document.createElement('a');
+    a.href = `#ch${ch.n}-s${i}`;
+    a.textContent = s;
+    secs.appendChild(a);
+  });
+  wrap.appendChild(secs);
+  navList.appendChild(wrap);
+});
+// open chapter 1 by default
+navList.querySelector('.nav-chapter').classList.add('open');
+
+/* ================= QUIZ DATA ================= */
+renderQuiz(document.getElementById('ch1-quiz1'), {
+  q: "You call pthread_create() five times in a loop, passing &i (the address of the shared loop variable) as the arg each time, instead of a per-thread allocated struct. What actually goes wrong?",
+  options: [
+    "Nothing — pthread_create() copies the value of i automatically before starting the thread.",
+    "By the time each coder thread actually reads *arg, the loop may have already advanced i further, so multiple (or all) coder threads can end up reading the same, final, wrong value.",
+    "The program fails to compile, since pthread_create() requires a heap pointer.",
+    "Only the first thread created reads the correct value; all others get NULL."
+  ],
+  correct: 1,
+  explain: "Correct. pthread_create() does not guarantee the new thread runs before the loop continues, so a shared address like &i is a classic race — always give each thread its own independently allocated argument."
+});
+renderQuiz(document.getElementById('ch2-quiz1'), {
+  q: "What is the single clone() flag that, more than any other, is responsible for making pthread_create()'s result behave like a 'thread' (sharing the heap) rather than an isolated 'process'?",
+  options: [
+    "CLONE_THREAD",
+    "CLONE_VM",
+    "CLONE_SETTLS",
+    "CLONE_SIGHAND"
+  ],
+  correct: 1,
+  explain: "Right. CLONE_VM shares the entire virtual address space (the mm_struct), which is precisely what makes the heap shared between the caller and the new thread."
+});
+renderQuiz(document.getElementById('ch3-quiz1'), {
+  q: "Two coder threads are both executing the exact same compiled coder_routine() function. What field in their respective task_structs guarantees they can be scheduled completely independently (one Running, one Blocked) at the same instant?",
+  options: [
+    "Their shared mm pointer, since that's what makes them threads.",
+    "Their independent 'state' field — each task_struct has its own scheduling state, even though they share mm.",
+    "Their shared tgid, since that groups them as one process.",
+    "There is no such field; independent scheduling is impossible for threads in the same process."
+  ],
+  correct: 1,
+  explain: "Correct. Each thread gets its own task_struct with its own independent 'state' field — that per-thread scheduling state is exactly what allows one coder to be Blocked while another is Running, despite sharing an address space."
+});
+renderQuiz(document.getElementById('ch4-quiz1'), {
+  q: "Why does glibc implement errno using Thread-Local Storage rather than as a single global int, given that TLS variables ultimately live somewhere shared-adjacent in the process's memory anyway?",
+  options: [
+    "TLS variables are actually stored in a completely separate process from the caller.",
+    "TLS gives each thread its own private copy accessed via a per-thread base address (%fs), so concurrent syscalls failing in different threads never overwrite each other's error code — a true global would let one thread's error clobber another's.",
+    "It's purely a historical accident with no technical benefit today.",
+    "errno is not actually implemented using TLS in modern glibc."
+  ],
+  correct: 1,
+  explain: "Correct. The whole point is per-thread isolation of a variable that behaves like a global in terms of convenient access — without TLS, concurrent failing syscalls across threads would corrupt each other's errno."
+});
+renderQuiz(document.getElementById('ch5-quiz1'), {
+  q: "Registers like %rax and %rsp physically exist only once per CPU core. In what sense, then, are they 'private' to a given thread?",
+  options: [
+    "They aren't private at all — any thread can read any other thread's register values at any time.",
+    "Privacy is maintained by the kernel: on every context switch, the outgoing thread's register values are saved into its TCB and the incoming thread's saved values are restored — so from software's perspective each thread appears to have its own registers, even though the hardware is shared and swapped.",
+    "Each CPU core has a dedicated, separate set of registers reserved permanently for each thread.",
+    "Registers are duplicated in software for every thread at creation time and never touch real hardware."
+  ],
+  correct: 1,
+  explain: "Right. Register privacy is an illusion maintained entirely by save/restore during context switches (Volume 2 covers switch_to() in detail) — the hardware registers themselves are a shared, borrowed resource."
+});
+renderQuiz(document.getElementById('ch6-quiz1'), {
+  q: "A coder thread's routine returns, but no other thread ever calls pthread_join() on it, and it wasn't created detached. What's the consequence?",
+  options: [
+    "Nothing — the kernel automatically reclaims all thread resources the instant the function returns, regardless of join status.",
+    "The thread's resources are left unreclaimed (a leak) for the remaining lifetime of the process — exactly the kind of resource leak Codexion's grading criteria explicitly penalize.",
+    "The whole process crashes immediately.",
+    "The thread automatically restarts itself."
+  ],
+  correct: 1,
+  explain: "Correct. A terminated-but-unjoined joinable thread leaks its kernel-held resources until either joined or the process exits — which is why a clean Codexion shutdown must join every coder thread."
+});
+</script>
+
+
+</body>
+</html>

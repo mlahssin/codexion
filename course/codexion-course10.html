@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codexion Course 10: Designing Codexion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f14; --bg-elev:#12151c; --bg-card:#171b24; --border:#252b38;
+  --text:#e7e9ee; --text-dim:#9aa3b5; --text-faint:#5c6478;
+  --accent-take:#5ee6ff;   /* has taken a dongle */
+  --accent-compile:#4f8cff; /* compiling */
+  --accent-debug:#ffb454;   /* debugging */
+  --accent-refactor:#b98eff;/* refactoring */
+  --accent-burnout:#ff5470; /* burned out */
+  --mono:'IBM Plex Mono', monospace;
+  --sans:'Inter', sans-serif;
+  --radius:10px;
+}
+html[data-theme="light"]{
+  --bg:#f5f6f8; --bg-elev:#ffffff; --bg-card:#ffffff; --border:#dde1e8;
+  --text:#191c22; --text-dim:#565f70; --text-faint:#8890a0;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  line-height:1.65; font-size:16px; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent-compile);}
+code, .mono{font-family:var(--mono);}
+
+/* ---------- Progress bar ---------- */
+#progress-bar{position:fixed; top:0; left:0; height:3px; background:linear-gradient(90deg,var(--accent-take),var(--accent-compile),var(--accent-debug),var(--accent-refactor)); width:0%; z-index:1000; transition:width .1s linear;}
+
+/* ---------- Layout ---------- */
+#app{display:flex; min-height:100vh;}
+#sidebar{
+  width:300px; flex-shrink:0; background:var(--bg-elev); border-right:1px solid var(--border);
+  position:sticky; top:0; height:100vh; overflow-y:auto; padding:20px 0 60px;
+}
+#sidebar .brand{padding:0 20px 16px; border-bottom:1px solid var(--border); margin-bottom:12px;}
+#sidebar .brand-title{font-family:var(--mono); font-weight:700; font-size:1.05rem; letter-spacing:.02em;}
+#sidebar .brand-sub{color:var(--text-faint); font-size:.78rem; margin-top:4px;}
+#theme-toggle{
+  margin-top:12px; background:var(--bg-card); border:1px solid var(--border); color:var(--text);
+  padding:6px 12px; border-radius:20px; font-size:.75rem; cursor:pointer; font-family:var(--mono);
+}
+.nav-chapter{border-bottom:1px solid var(--border);}
+.nav-chapter-head{
+  display:flex; align-items:center; gap:10px; padding:10px 20px; cursor:pointer; user-select:none;
+  font-size:.86rem; color:var(--text-dim); transition:color .15s;
+}
+.nav-chapter-head:hover{color:var(--text);}
+.nav-chapter-head .num{font-family:var(--mono); color:var(--text-faint); font-size:.75rem; width:20px; flex-shrink:0;}
+.nav-chapter-head .arrow{margin-left:auto; transition:transform .2s; font-size:.7rem; color:var(--text-faint);}
+.nav-chapter.open .arrow{transform:rotate(90deg);}
+.nav-sections{max-height:0; overflow:hidden; transition:max-height .25s ease;}
+.nav-chapter.open .nav-sections{max-height:500px;}
+.nav-sections a{
+  display:block; padding:6px 20px 6px 50px; font-size:.8rem; color:var(--text-faint);
+  text-decoration:none; border-left:2px solid transparent;
+}
+.nav-sections a:hover, .nav-sections a.active{color:var(--accent-compile); border-left-color:var(--accent-compile);}
+
+#main{flex:1; min-width:0; max-width:900px; margin:0 auto; padding:60px 48px 160px;}
+
+/* ---------- Hero ---------- */
+.hero{padding:20px 0 50px; border-bottom:1px solid var(--border); margin-bottom:50px;}
+.hero-eyebrow{font-family:var(--mono); font-size:.78rem; color:var(--accent-take); letter-spacing:.08em; text-transform:uppercase; margin-bottom:14px;}
+.hero h1{font-family:var(--mono); font-size:2.4rem; font-weight:700; line-height:1.15; margin-bottom:16px;}
+.hero p.lead{color:var(--text-dim); font-size:1.08rem; max-width:640px; margin-bottom:32px;}
+.legend{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:36px;}
+.legend .chip{
+  display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:.76rem;
+  padding:6px 12px; border-radius:20px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-dim);
+}
+.legend .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+
+/* ---------- Chapter content ---------- */
+.chapter{margin-bottom:90px; scroll-margin-top:20px;}
+.chapter-label{font-family:var(--mono); color:var(--text-faint); font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px;}
+.chapter h2{font-family:var(--mono); font-size:1.9rem; margin-bottom:26px; padding-bottom:16px; border-bottom:1px solid var(--border);}
+.section{scroll-margin-top:20px; margin-bottom:44px;}
+.section h3{font-size:1.25rem; margin-bottom:14px; font-weight:700;}
+.section h4{font-size:1.02rem; margin:20px 0 10px; font-weight:700; color:var(--text-dim);}
+.section p{margin-bottom:14px; max-width:70ch;}
+.section ul, .section ol{margin:0 0 14px 22px;}
+.section li{margin-bottom:6px;}
+
+.why-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-take);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.why-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-take); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.codexion-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-refactor);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.codexion-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-refactor); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+.analogy-box{
+  background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--accent-debug);
+  border-radius:6px; padding:18px 20px; margin:18px 0;
+}
+.analogy-box .tag{font-family:var(--mono); font-size:.72rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; display:block;}
+
+pre{
+  background:#08090c; border:1px solid var(--border); border-radius:8px; padding:16px 18px;
+  overflow-x:auto; margin:16px 0; font-size:.86rem; line-height:1.55;
+}
+html[data-theme="light"] pre{background:#f0f1f4;}
+pre code{font-family:var(--mono); color:#c8ccd8;}
+html[data-theme="light"] pre code{color:#2b2f3a;}
+.log-line{display:block;}
+.log-ts{color:var(--text-faint);}
+.log-take{color:var(--accent-take);}
+.log-compile{color:var(--accent-compile);}
+.log-debug{color:var(--accent-debug);}
+.log-refactor{color:var(--accent-refactor);}
+.log-burnout{color:var(--accent-burnout); font-weight:600;}
+
+.expandable{border:1px solid var(--border); border-radius:8px; margin:16px 0; overflow:hidden;}
+.expandable summary{
+  padding:13px 18px; cursor:pointer; font-weight:600; font-size:.92rem; background:var(--bg-card);
+  list-style:none; display:flex; align-items:center; gap:10px;
+}
+.expandable summary::-webkit-details-marker{display:none;}
+.expandable summary::before{content:'+'; font-family:var(--mono); color:var(--accent-compile); font-weight:700;}
+.expandable[open] summary::before{content:'−';}
+.expandable .body{padding:16px 18px; border-top:1px solid var(--border);}
+
+svg{max-width:100%; height:auto;}
+.diagram-wrap{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:24px; margin:20px 0; text-align:center;}
+.diagram-caption{font-size:.82rem; color:var(--text-faint); margin-top:10px; font-family:var(--mono);}
+
+/* ---------- Quiz ---------- */
+.quiz{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:22px 24px; margin:20px 0;}
+.quiz .q-title{font-family:var(--mono); font-size:.75rem; color:var(--accent-debug); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px;}
+.quiz .q-text{font-weight:600; margin-bottom:14px;}
+.quiz .opts{display:flex; flex-direction:column; gap:8px;}
+.quiz button.opt{
+  text-align:left; padding:11px 14px; background:var(--bg-elev); border:1px solid var(--border); border-radius:7px;
+  color:var(--text); cursor:pointer; font-family:var(--sans); font-size:.92rem; transition:.15s;
+}
+.quiz button.opt:hover{border-color:var(--accent-compile);}
+.quiz button.opt.correct{border-color:#3ecf8e; background:rgba(62,207,142,.12);}
+.quiz button.opt.wrong{border-color:var(--accent-burnout); background:rgba(255,84,112,.12);}
+.quiz .feedback{margin-top:12px; font-size:.88rem; color:var(--text-dim); display:none;}
+.quiz .feedback.show{display:block;}
+
+/* ---------- Exercises ---------- */
+.exercises{background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:24px 26px; margin-top:30px;}
+.exercises h4{font-family:var(--mono); font-size:.8rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;}
+.ex-group{margin-top:16px;}
+.ex-group .ex-label{font-size:.78rem; color:var(--accent-take); font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;}
+.ex-group ol{margin-left:20px;}
+.ex-group li{margin-bottom:8px; color:var(--text-dim); font-size:.94rem;}
+
+table{width:100%; border-collapse:collapse; margin:16px 0; font-size:.9rem;}
+th,td{border:1px solid var(--border); padding:8px 12px; text-align:left;}
+th{background:var(--bg-card); font-family:var(--mono); font-size:.78rem; text-transform:uppercase;}
+
+.nav-footer{display:flex; justify-content:space-between; margin-top:60px; padding-top:24px; border-top:1px solid var(--border);}
+.nav-footer a{font-family:var(--mono); font-size:.85rem; text-decoration:none; color:var(--text-dim); display:flex; flex-direction:column;}
+.nav-footer a:hover{color:var(--accent-compile);}
+.nav-footer .lbl{font-size:.7rem; color:var(--text-faint); text-transform:uppercase; margin-bottom:4px;}
+
+@media (max-width:860px){
+  #sidebar{position:fixed; left:-300px; z-index:900; transition:left .2s; box-shadow:0 0 40px rgba(0,0,0,.4);}
+  #sidebar.open{left:0;}
+  #main{padding:60px 20px 120px; max-width:100%;}
+  #menu-btn{display:flex !important;}
+}
+#menu-btn{
+  display:none; position:fixed; top:16px; left:16px; z-index:950; width:40px; height:40px;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:8px; color:var(--text);
+  align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem;
+}
+</style>
+</head>
+<body>
+<div id="progress-bar"></div>
+<div id="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</div>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="brand">
+      <div class="brand-title">// codexion — course 10</div>
+      <div class="brand-sub">Designing Codexion</div>
+      <button id="theme-toggle" onclick="toggleTheme()">☀ light mode</button>
+    </div>
+    <div id="nav-list"></div>
+  </nav>
+
+  <main id="main">
+
+    <section class="hero">
+      <div class="hero-eyebrow">Course 10 · the capstone</div>
+      <h1>Designing Codexion</h1>
+      <p class="lead">Nine courses of theory converge here. This one is the blueprint: the architecture the subject's constraints force you into, the heap that is the only place fairness can live, the wait predicate that turns an arbitrary wakeup into a fair grant, the monitor thread that watches for a death its victim can't notice, and the shutdown sequence that most implementations get wrong. It ends with the ten questions an evaluator will ask and the answers that demonstrate you built this rather than assembled it.</p>
+      <div class="legend">
+        <div class="chip"><span class="dot" style="background:var(--accent-take)"></span> has taken a dongle</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-compile)"></span> compiling</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-debug)"></span> debugging</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-refactor)"></span> refactoring</div>
+        <div class="chip"><span class="dot" style="background:var(--accent-burnout)"></span> burned out</div>
+      </div>
+      <div class="diagram-wrap" id="hero-diagram"></div>
+      <div class="diagram-caption">The Codexion hub: N coders in a circle, N dongles between them, one shared Quantum Compiler in the center.</div>
+    </section>
+
+    <div id="chapters-root">
+
+    <!-- ============ CHAPTER 1 ============ -->
+    <section class="chapter" id="ch1">
+      <div class="chapter-label">Chapter 01</div>
+      <h2>Architecture</h2>
+
+      <div class="section" id="ch1-s0">
+        <h3>1.1 &nbsp;What the subject forces</h3>
+        <div class="why-box"><span class="tag">Start from the constraints</span>
+        Before designing anything, list what the subject has already decided for you. Good architecture here isn't invention — it's recognizing that the requirements have already narrowed the space to roughly one shape, and building that shape cleanly.</div>
+        <table>
+          <tr><th>Requirement</th><th>What it forces</th></tr>
+          <tr><td>"Each coder must be represented by a thread"</td><td>N coder threads via <code>pthread_create</code></td></tr>
+          <tr><td>"A separate <strong>monitor</strong> thread must detect burnout"</td><td>One additional thread; N+1 total</td></tr>
+          <tr><td>"Global variables are forbidden!"</td><td>All shared state heap-allocated, passed by pointer</td></tr>
+          <tr><td>"Protect each dongle's state with a mutex"</td><td>Mutex-guarded dongle state</td></tr>
+          <tr><td>"Fair arbitration is mandatory… fifo or edf"</td><td>An explicit request queue — the primitives can't order (Course 5)</td></tr>
+          <tr><td>"You must implement a priority queue (heap)"</td><td>Hand-written binary heap; no library</td></tr>
+          <tr><td>"Logging must be serialized"</td><td>A dedicated log mutex</td></tr>
+          <tr><td>"All memory must be properly freed"</td><td>Every thread joined, every allocation freed, every mutex destroyed</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch1-s1">
+        <h3>1.2 &nbsp;The shape that falls out</h3>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 470 300" xmlns="http://www.w3.org/2000/svg">
+            <rect x="140" y="10" width="190" height="52" rx="8" fill="none" stroke="var(--accent-refactor)" stroke-width="2"/>
+            <text x="235" y="32" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--text)">sim_t (heap)</text>
+            <text x="235" y="50" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text-faint)">params · dongles[] · heap · stop · mtx · cv</text>
+            <rect x="15" y="105" width="105" height="46" rx="6" fill="none" stroke="var(--accent-compile)" stroke-width="1.5"/>
+            <text x="67" y="124" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">coder 1</text>
+            <text x="67" y="140" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text-faint)">thread</text>
+            <rect x="130" y="105" width="105" height="46" rx="6" fill="none" stroke="var(--accent-compile)" stroke-width="1.5"/>
+            <text x="182" y="124" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">coder 2</text>
+            <text x="182" y="140" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text-faint)">thread</text>
+            <text x="262" y="132" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" fill="var(--text-faint)">…</text>
+            <rect x="285" y="105" width="105" height="46" rx="6" fill="none" stroke="var(--accent-compile)" stroke-width="1.5"/>
+            <text x="337" y="124" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">coder N</text>
+            <text x="337" y="140" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text-faint)">thread</text>
+            <rect x="330" y="195" width="125" height="46" rx="6" fill="none" stroke="var(--accent-burnout)" stroke-width="2"/>
+            <text x="392" y="214" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">monitor</text>
+            <text x="392" y="230" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text-faint)">thread</text>
+            <rect x="15" y="195" width="125" height="46" rx="6" fill="none" stroke="var(--accent-debug)" stroke-width="1.5"/>
+            <text x="77" y="214" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--text)">log_mtx</text>
+            <text x="77" y="230" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="var(--text-faint)">serializes output</text>
+            <line x1="67" y1="105" x2="180" y2="62" stroke="var(--text-faint)"/>
+            <line x1="182" y1="105" x2="220" y2="62" stroke="var(--text-faint)"/>
+            <line x1="337" y1="105" x2="290" y2="62" stroke="var(--text-faint)"/>
+            <line x1="392" y1="195" x2="320" y2="62" stroke="var(--accent-burnout)" stroke-dasharray="3 2"/>
+            <text x="235" y="278" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">Every thread receives one pointer to sim_t. No globals anywhere.</text>
+          </svg>
+          <div class="diagram-caption">N+1 threads, one heap-allocated shared context, two mutexes with distinct jobs.</div>
+        </div>
+      </div>
+
+      <div class="section" id="ch1-s2">
+        <h3>1.3 &nbsp;The data model</h3>
+        <pre><code>typedef struct {
+    int   id;                    /* 1..n */
+    int   compiles;              /* how many completed */
+    long  last_compile_start;    /* ms — deadline base for edf AND burnout */
+    struct dongle *left, *right;
+    struct sim *sim;             /* back-pointer to shared context */
+} coder_t;
+
+typedef struct dongle {
+    int   id;
+    int   held_by;               /* coder id, or 0 if free */
+    long  released_at;           /* ms — cooldown base */
+} dongle_t;
+
+typedef struct sim {
+    /* parsed parameters */
+    int   n, t_burnout, t_compile, t_debug, t_refactor, compiles_required, cooldown;
+    int   use_edf;
+
+    /* shared mutable state — all guarded by mtx */
+    dongle_t *dongles;           /* n dongles */
+    coder_t  *coders;            /* n coders */
+    heap_t   *queue;             /* pending dongle requests, ordered by policy */
+    int       stop;              /* 1 = simulation over */
+    long      start_ms;
+
+    pthread_mutex_t mtx;         /* guards everything above */
+    pthread_cond_t  cv;          /* signals state changes */
+    pthread_mutex_t log_mtx;     /* guards output only */
+} sim_t;</code></pre>
+        <div class="why-box"><span class="tag">Note the one field doing double duty</span>
+        <code>last_compile_start</code> is both the burnout deadline base (<code>+ t_burnout</code> = when this coder dies) and the EDF priority key. The subject defines them with the same expression precisely because they're the same quantity viewed twice. One field, one write site, two readers.</div>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        Two mutexes, deliberately. <code>mtx</code> guards simulation state; <code>log_mtx</code> guards <code>printf</code>. Separating them means a coder writing a log line doesn't block another coder from checking dongle availability. Merging them would work but needlessly serializes unrelated work — and you'd be holding the simulation lock across an I/O call.</div>
+        <div id="ch1-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 1 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why two mutexes rather than one? What specifically would degrade if you merged them?</li>
+          <li>Which single field serves both burnout detection and EDF ordering, and why is that not a coincidence?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 2 ============ -->
+    <section class="chapter" id="ch2">
+      <div class="chapter-label">Chapter 02</div>
+      <h2>The scheduler &amp; the heap</h2>
+
+      <div class="section" id="ch2-s0">
+        <h3>2.1 &nbsp;Why a heap at all</h3>
+        <div class="why-box"><span class="tag">The question the subject is really asking</span>
+        Neither primitive you're given can order anything. <code>pthread_mutex_t</code> makes no fairness promise (Course 5). <code>pthread_cond_t</code> wakes an arbitrary waiter (Course 6). So "grant the dongle to the coder with the earliest deadline" cannot come from the primitives — it must come from a structure you build. Every dongle release asks "who's next?", and a binary min-heap answers in O(1) with O(log n) maintenance.</div>
+      </div>
+
+      <div class="section" id="ch2-s1">
+        <h3>2.2 &nbsp;One comparison function, two policies</h3>
+        <p>The entire difference between fifo and edf should live in one place:</p>
+        <pre><code>typedef struct {
+    int  coder_id;
+    long arrival;      /* ms — fifo key */
+    long deadline;     /* last_compile_start + t_burnout — edf key */
+} request_t;
+
+/* Returns true if a should be served before b. */
+static int higher_priority(sim_t *sim, request_t *a, request_t *b) {
+    if (sim-&gt;use_edf) {
+        if (a-&gt;deadline != b-&gt;deadline) return a-&gt;deadline &lt; b-&gt;deadline;
+        return a-&gt;arrival &lt; b-&gt;arrival;      /* deterministic tie-break */
+    }
+    return a-&gt;arrival &lt; b-&gt;arrival;          /* fifo */
+}</code></pre>
+        <div class="why-box"><span class="tag">The tie-break is required, not optional</span>
+        The subject says: "Due to timestamp precision, equal deadlines may rarely occur… The tie-breaker rule is required to ensure a fully deterministic EDF policy, even in edge cases." Falling back to arrival order is the natural choice — it's already there, and it's total (no two requests share an arrival timestamp <em>and</em> a coder id).</div>
+      </div>
+
+      <div class="section" id="ch2-s2">
+        <h3>2.3 &nbsp;Why this design survives the recode</h3>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — the recode is graded</span>
+        The scale asks the evaluator to have you turn fifo into lifo, and explicitly checks "the change is made in the scheduler/queue logic itself and not at a superficial level." With the design above, lifo is: <code>return a-&gt;arrival &gt; b-&gt;arrival;</code> — one character. That's not luck; it's what "separate policy from mechanism" buys you. If your ordering logic were spread across <code>coder_routine</code>, this would be a rewrite under pressure.</div>
+        <p>Two implementation notes that matter:</p>
+        <ul>
+          <li><strong>Sift depth is O(log n)</strong>, so recursion is bounded — no stack-overflow risk even at the subject's 200-coder limit. Iterative is fine too.</li>
+          <li><strong>The heap is shared mutable state.</strong> Every <code>insert</code>, <code>pop</code>, and even <code>peek</code> happens under <code>sim-&gt;mtx</code>. A "harmless" unlocked peek is a data race Helgrind will find (Course 9).</li>
+        </ul>
+        <div id="ch2-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 2 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why can't the mutex or condition variable implement fifo/edf ordering themselves? Which component must?</li>
+          <li>Why does the subject require a deterministic tie-break for edf, and what's the natural choice?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 3 ============ -->
+    <section class="chapter" id="ch3">
+      <div class="chapter-label">Chapter 03</div>
+      <h2>Condition variables &amp; the wait predicate</h2>
+
+      <div class="section" id="ch3-s0">
+        <h3>3.1 &nbsp;The predicate is the design</h3>
+        <div class="why-box"><span class="tag">The central insight</span>
+        Your condition variable cannot choose who wakes. So don't ask it to. Make <strong>"am I the one the heap selected?"</strong> part of every coder's wait predicate. Wake everyone, let each check, and only the heap's chosen coder passes. The CV is demoted to a pure sleep/wake mechanism — which is all it was ever capable of being.</div>
+        <pre><code>static int can_proceed(sim_t *sim, coder_t *c) {
+    long now = now_ms(sim);
+    return dongle_free(c-&gt;left)  &amp;&amp; cooled(sim, c-&gt;left,  now)
+        &amp;&amp; dongle_free(c-&gt;right) &amp;&amp; cooled(sim, c-&gt;right, now)
+        &amp;&amp; heap_peek(sim-&gt;queue) == c-&gt;id;      /* the heap decides, not the CV */
+}</code></pre>
+        <p>Five conjuncts, each earning its place:</p>
+        <table>
+          <tr><th>Conjunct</th><th>Drop it and…</th></tr>
+          <tr><td>left free</td><td>Dongle duplication — automatic 0</td></tr>
+          <tr><td>left cooled</td><td>Cooldown violated; the scale checks this by timestamp arithmetic</td></tr>
+          <tr><td>right free</td><td>Same as left</td></tr>
+          <tr><td>right cooled</td><td>Same as left</td></tr>
+          <tr><td>heap head is me</td><td>Fairness gone — grant order becomes arbitrary, fifo/edf unenforced</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch3-s1">
+        <h3>3.2 &nbsp;The acquisition</h3>
+        <pre><code>static int acquire_dongles(sim_t *sim, coder_t *c) {
+    pthread_mutex_lock(&amp;sim-&gt;mtx);
+    heap_insert(sim-&gt;queue, make_request(sim, c));   /* register, ordered by policy */
+
+    while (!sim-&gt;stop &amp;&amp; !can_proceed(sim, c))      /* while — never if */
+        pthread_cond_wait(&amp;sim-&gt;cv, &amp;sim-&gt;mtx);
+
+    if (sim-&gt;stop) {                                 /* woken to shut down */
+        heap_remove(sim-&gt;queue, c-&gt;id);
+        pthread_mutex_unlock(&amp;sim-&gt;mtx);
+        return 0;
+    }
+
+    heap_pop(sim-&gt;queue);
+    take(c-&gt;left, c);   log_state(sim, c, "has taken a dongle");
+    take(c-&gt;right, c);  log_state(sim, c, "has taken a dongle");
+    c-&gt;last_compile_start = now_ms(sim);             /* resets burnout AND edf key */
+    log_state(sim, c, "is compiling");
+    pthread_mutex_unlock(&amp;sim-&gt;mtx);
+    return 1;
+}</code></pre>
+        <p>Note <code>!sim-&gt;stop</code> inside the predicate. Without it, a coder woken by the shutdown broadcast would find <code>can_proceed</code> false and go straight back to sleep — and <code>pthread_join</code> would hang forever (Course 9, Chapter 6). This is the most common Codexion shutdown bug.</p>
+      </div>
+
+      <div class="section" id="ch3-s2">
+        <h3>3.3 &nbsp;The release</h3>
+        <pre><code>static void release_dongles(sim_t *sim, coder_t *c) {
+    pthread_mutex_lock(&amp;sim-&gt;mtx);
+    long now = now_ms(sim);
+    c-&gt;left-&gt;held_by  = 0;  c-&gt;left-&gt;released_at  = now;   /* cooldown starts now */
+    c-&gt;right-&gt;held_by = 0;  c-&gt;right-&gt;released_at = now;
+    c-&gt;compiles++;
+    pthread_cond_broadcast(&amp;sim-&gt;cv);    /* state changed — everyone re-checks */
+    pthread_mutex_unlock(&amp;sim-&gt;mtx);
+}</code></pre>
+        <div class="why-box"><span class="tag">Why broadcast here</span>
+        Different coders wait on different dongles, so a <code>signal</code> might wake a coder whose dongles are still busy while the one that could proceed sleeps on — a lost wakeup (Course 6, Chapter 3). Broadcast is correct. The alternative — one CV per dongle — is more precise and scales better at 200 coders; both are defensible if you can explain the tradeoff.</div>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — the cooldown subtlety</span>
+        A released dongle isn't available: <code>cooled()</code> checks <code>now - released_at &gt;= sim-&gt;cooldown</code>. But nothing <em>wakes</em> a coder when a cooldown merely expires — no thread runs at that moment. Either the monitor's periodic broadcast covers it, or coders use <code>pthread_cond_timedwait</code> with the cooldown expiry as the deadline. Miss this and coders can sleep past an available dongle. It's the sort of gap the 800ms-cooldown benchmark exists to expose.</div>
+        <div id="ch3-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 3 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Write out all five conjuncts of the wait predicate and state exactly what breaks if each is omitted.</li>
+          <li>Nothing runs at the moment a cooldown expires. Name two designs that ensure a waiting coder still notices.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 4 ============ -->
+    <section class="chapter" id="ch4">
+      <div class="chapter-label">Chapter 04</div>
+      <h2>The monitor thread &amp; the stop flag</h2>
+
+      <div class="section" id="ch4-s0">
+        <h3>4.1 &nbsp;Why a separate thread</h3>
+        <div class="why-box"><span class="tag">Why the subject mandates it</span>
+        A burnout must be reported within 10ms of the deadline — but the coder who burns out is, by definition, <em>blocked</em>. It cannot notice its own death; it's asleep waiting for a dongle it will never get. Something else must be awake and watching. Hence: "A separate monitor thread must detect burnout precisely and stop the simulation."</div>
+      </div>
+
+      <div class="section" id="ch4-s1">
+        <h3>4.2 &nbsp;The implementation</h3>
+        <pre><code>static void *monitor(void *arg) {
+    sim_t *sim = arg;
+    while (1) {
+        pthread_mutex_lock(&amp;sim-&gt;mtx);
+
+        /* 1. Everyone finished? */
+        if (all_done(sim)) {
+            sim-&gt;stop = 1;
+            pthread_cond_broadcast(&amp;sim-&gt;cv);
+            pthread_mutex_unlock(&amp;sim-&gt;mtx);
+            return NULL;
+        }
+
+        /* 2. Anyone burned out? */
+        long now = now_ms(sim);
+        for (int i = 0; i &lt; sim-&gt;n; i++) {
+            coder_t *c = &amp;sim-&gt;coders[i];
+            if (now - c-&gt;last_compile_start &gt;= sim-&gt;t_burnout) {
+                sim-&gt;stop = 1;                    /* BEFORE printing */
+                log_burnout(sim, c, now);         /* the last line */
+                pthread_cond_broadcast(&amp;sim-&gt;cv); /* wake everyone so join works */
+                pthread_mutex_unlock(&amp;sim-&gt;mtx);
+                return NULL;
+            }
+        }
+
+        pthread_cond_broadcast(&amp;sim-&gt;cv);  /* nudge — covers expired cooldowns */
+        pthread_mutex_unlock(&amp;sim-&gt;mtx);
+        usleep(1000);                       /* sleep OUTSIDE the lock */
+    }
+}</code></pre>
+        <table>
+          <tr><th>Detail</th><th>Why it's load-bearing</th></tr>
+          <tr><td>Reads under <code>mtx</code></td><td><code>last_compile_start</code> is written by coders — an unlocked read is a race Helgrind finds</td></tr>
+          <tr><td><code>usleep</code> outside the lock</td><td>Sleeping under it would block every coder for 1ms out of every 1ms</td></tr>
+          <tr><td><code>stop = 1</code> before printing</td><td>Guarantees burnout is the last line — coders check <code>stop</code> before logging</td></tr>
+          <tr><td>Broadcast, not signal</td><td>Every sleeper must observe <code>stop</code>, or <code>pthread_join</code> hangs</td></tr>
+          <tr><td>1ms poll</td><td>1ms granularity + scheduler latency ≪ 10ms budget (Course 8)</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch4-s2">
+        <h3>4.3 &nbsp;The stop flag protocol</h3>
+        <p>Three rules, and every one is a bug if broken:</p>
+        <ol>
+          <li><strong>Always read and write it under <code>mtx</code>.</strong> Not <code>volatile</code>. Not "it's just an int." An unsynchronized concurrent read/write is undefined behavior and a graded race (Course 9, Chapter 5).</li>
+          <li><strong>Include it in every wait predicate:</strong> <code>while (!sim-&gt;stop &amp;&amp; !can_proceed(...))</code>. Otherwise a woken coder sleeps again and join hangs.</li>
+          <li><strong>Check it before every log line.</strong> That's what makes burnout provably last.</li>
+        </ol>
+        <div class="codexion-box"><span class="tag">Connect to Codexion — the infeasible case</span>
+        <code>./codexion 5 500 200 200 200 10 0 fifo</code>: one cycle is 600ms against a 500ms burnout window, so burnout is guaranteed by arithmetic. What's actually graded is the reporting — within 10ms, and the last line. This whole chapter is the answer to that one test case.</div>
+        <div id="ch4-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 4 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Why can't a coder detect its own burnout? What does that force architecturally?</li>
+          <li>State the three rules of the stop flag protocol and the specific bug each prevents.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 5 ============ -->
+    <section class="chapter" id="ch5">
+      <div class="chapter-label">Chapter 05</div>
+      <h2>Design decisions</h2>
+
+      <div class="section" id="ch5-s0">
+        <h3>5.1 &nbsp;The decisions worth defending</h3>
+        <p>Every one of these is a real fork in the road. What matters isn't which branch you take — it's that you took it deliberately.</p>
+        <table>
+          <tr><th>Decision</th><th>Options</th><th>Recommended</th></tr>
+          <tr><td>Mutex granularity</td><td>One global sim mutex vs. per-dongle mutexes</td><td><strong>One sim mutex.</strong> The heap is global state anyway, so per-dongle locks would need the sim lock too — you'd get complexity without concurrency.</td></tr>
+          <tr><td>Condition variables</td><td>One shared CV vs. one per dongle</td><td>Either. Shared+broadcast is simpler; per-dongle scales better at 200. Defend the tradeoff.</td></tr>
+          <tr><td>Cooldown wakeups</td><td>Monitor's periodic broadcast vs. <code>cond_timedwait</code></td><td>Monitor broadcast is simpler and already exists. <code>timedwait</code> is tighter.</td></tr>
+          <tr><td>Deadlock prevention</td><td>Lock ordering vs. atomic both-or-neither</td><td><strong>Both-or-neither</strong> — the predicate already checks both dongles under one lock, so hold-and-wait never occurs.</td></tr>
+          <tr><td>Log mutex</td><td>Separate vs. reuse sim mutex</td><td><strong>Separate.</strong> Don't hold the simulation lock across I/O.</td></tr>
+          <tr><td>Timestamps</td><td><code>gettimeofday</code> vs. <code>clock_gettime</code></td><td><code>gettimeofday</code> — the subject recommends it and it's in the allowed list. Know it's wall-clock (Course 8).</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch5-s1">
+        <h3>5.2 &nbsp;Which Coffman condition you break</h3>
+        <div class="why-box"><span class="tag">The strong answer</span>
+        Because <code>can_proceed()</code> checks <em>both</em> dongles under a single mutex and a coder takes both or neither, <strong>hold-and-wait never occurs</strong> — a coder never holds one dongle while waiting for the other. No hold-and-wait means no circular wait means no deadlock, by construction rather than by luck. That's one sentence, and it's exactly what the README's "Blocking cases handled" section needs.</div>
+        <p>Notice you get this for free. The predicate had to check both dongles anyway (you can't compile with one). Deadlock prevention fell out of a design chosen for other reasons — which is what good design feels like.</p>
+      </div>
+
+      <div class="section" id="ch5-s2">
+        <h3>5.3 &nbsp;Cleanup</h3>
+        <pre><code>/* after the monitor returns */
+for (int i = 0; i &lt; sim-&gt;n; i++)
+    pthread_join(tids[i], NULL);        /* every coder — unjoined = leak */
+pthread_join(monitor_tid, NULL);
+
+pthread_mutex_destroy(&amp;sim-&gt;mtx);       /* only after all threads are gone */
+pthread_cond_destroy(&amp;sim-&gt;cv);
+pthread_mutex_destroy(&amp;sim-&gt;log_mtx);
+
+heap_free(sim-&gt;queue);
+free(sim-&gt;dongles);
+free(sim-&gt;coders);
+free(sim);</code></pre>
+        <div class="codexion-box"><span class="tag">Connect to Codexion</span>
+        The scale flags memory leaks as a 0, and checks with <code>valgrind --leak-check=full</code>. Two subtleties: an unjoined joinable thread leaks its resources (Course 2), and destroying a mutex while a thread still holds or waits on it is undefined behavior. Join first, destroy second, free last — in that order, always.</div>
+        <div id="ch5-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 5 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">Conceptual</div><ol>
+          <li>Which Coffman condition does the both-or-neither predicate eliminate, and why does that make deadlock impossible rather than merely unlikely?</li>
+          <li>Why must every mutex_destroy come after every pthread_join?</li>
+        </ol></div>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 6 ============ -->
+    <section class="chapter" id="ch6">
+      <div class="chapter-label">Chapter 06</div>
+      <h2>Evaluator questions</h2>
+
+      <div class="section" id="ch6-s0">
+        <h3>6.1 &nbsp;The ten you should be able to answer cold</h3>
+        <table>
+          <tr><th>Question</th><th>The core of a strong answer</th></tr>
+          <tr><td>"Why threads, not processes?"</td><td>Coders must share dongle state cheaply. Processes are isolated by design; sharing would need shm/IPC. Threads share by default via CLONE_VM.</td></tr>
+          <tr><td>"Why are globals forbidden?"</td><td>A global is implicitly reachable by every thread with no traceability. Heap + explicit pointer makes "who can touch this" visible in the code.</td></tr>
+          <tr><td>"Why a heap? Mutexes have wait queues."</td><td>Those queues are unordered by design and invisible to me. POSIX guarantees no fairness. The heap is the only place fifo/edf ordering can exist.</td></tr>
+          <tr><td>"How do you prevent deadlock?"</td><td>I eliminate hold-and-wait: both dongles are checked under one mutex and taken together or not at all. Circular wait can't form.</td></tr>
+          <tr><td>"How do you prevent starvation?"</td><td>The heap orders every request. Under edf, the nearest deadline is served first, which is provably optimal for feasible task sets.</td></tr>
+          <tr><td>"Why <code>while</code>, not <code>if</code>?"</td><td>Three reasons: spurious wakeups, stolen wakeups, and broadcast. A wakeup is a hint, never a promise.</td></tr>
+          <tr><td>"Why does cond_wait take a mutex?"</td><td>Unlock and sleep must be atomic, or a signal lands in the gap and is lost — the waiter sleeps forever on an available dongle.</td></tr>
+          <tr><td>"How is burnout within 10ms?"</td><td>Monitor polls at 1ms, reads under the lock, sleeps outside it. 1ms + scheduler latency ≪ 10ms.</td></tr>
+          <tr><td>"How do you know it's thread-safe?"</td><td>Helgrind, DRD, and TSan all clean on four configurations. Not "it works" — the tools check structure, not outcomes.</td></tr>
+          <tr><td>"Isn't this Dining Philosophers?"</td><td>Structurally yes. It adds mandated arbitration (fifo/edf), cooldown, and hard deadlines — a real-time problem, not just a liveness one.</td></tr>
+        </table>
+      </div>
+
+      <div class="section" id="ch6-s1">
+        <h3>6.2 &nbsp;The traps</h3>
+        <div class="why-box"><span class="tag">"You hold a mutex across a 200ms usleep — isn't that terrible?"</span>
+        <strong>No, and here it's required.</strong> The subject says a coder "must hold two dongles" for the whole compile. The mutex isn't protecting a data structure for a few instructions — it's modeling physical possession of a dongle. Releasing it mid-compile would let another coder take a dongle that's still plugged in. This deviates from the usual "keep critical sections short" advice deliberately, and I can say why.</div>
+        <div class="why-box"><span class="tag">"Under Helgrind, coders burn out at wrong times."</span>
+        Expected. Valgrind serializes threads and slows execution 20–50×, so timings are meaningless under it. Helgrind checks races and lock ordering; a native build checks timing. Two different tests, two different builds — never judge one with the other.</div>
+        <div class="why-box"><span class="tag">"Your edf gives some coders more urgency. Isn't that priority — what about priority inversion?"</span>
+        Different layers. Priority inversion is about <em>OS thread scheduling priorities</em>; all my threads run at the same default priority under CFS. My edf is a <em>userspace arbitration policy</em> over a dongle. No priority differences means no inversion to fix.</div>
+      </div>
+
+      <div class="section" id="ch6-s2">
+        <h3>6.3 &nbsp;The recode &amp; final checklist</h3>
+        <p><strong>fifo → lifo.</strong> The scale asks for it, and checks that the change lives in the queue logic rather than being faked superficially:</p>
+        <pre><code>/* fifo */  return a-&gt;arrival &lt; b-&gt;arrival;
+/* lifo */  return a-&gt;arrival &gt; b-&gt;arrival;</code></pre>
+        <p>One character. Then run <code>./codexion 5 3000 200 200 200 10 800 fifo</code> before and after and show the grant order reversed in the logs — that's the evidence the scale asks for.</p>
+        <div class="codexion-box"><span class="tag">Before you defend</span>
+        <ul>
+          <li><code>make re</code> — zero warnings under <code>-Wall -Wextra -Werror -pthread</code></li>
+          <li>All four benchmark cases, several runs each, native build</li>
+          <li>Helgrind, DRD, TSan — all clean on all four</li>
+          <li><code>valgrind --leak-check=full</code> — zero leaks</li>
+          <li>Log audit: two "has taken a dongle" before every "is compiling"; no dongle taken within its cooldown; burnout last</li>
+          <li>README has "Blocking cases handled" and "Thread synchronization mechanisms" — both required by the subject</li>
+          <li>You can do the lifo recode in under two minutes, calmly</li>
+        </ul>
+        </div>
+        <div id="ch6-quiz1"></div>
+      </div>
+
+      <div class="exercises">
+        <h4>Chapter 6 — Exercises</h4>
+        <div class="ex-group"><div class="ex-label">1337 defense question</div><ol>
+          <li>Answer all ten questions in 6.1 out loud, without notes, in under ten minutes total.</li>
+          <li>"Walk me through your Blocking cases handled section." Name your Coffman condition, starvation prevention, cooldown handling, burnout precision, and log serialization — in order.</li>
+          <li>Do the lifo recode from memory. Then explain how you'd prove it works from the logs.</li>
+        </ol></div>
+      </div>
+    </section>
+
+    </div><!-- /chapters-root -->
+
+  </main>
+</div>
+
+<script>
+/* ================= THEME ================= */
+function toggleTheme(){
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  document.getElementById('theme-toggle').textContent = isLight ? '☀ light mode' : '🌙 dark mode';
+}
+
+/* ================= PROGRESS BAR ================= */
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+});
+
+/* ================= HERO DIAGRAM (SVG, generated) ================= */
+(function(){
+  const N = 5, R = 110, cx=180, cy=150;
+  let coders = [], dongles = [];
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + i*(2*Math.PI/N);
+    coders.push({x: cx+R*Math.cos(a), y: cy+R*Math.sin(a), n:i+1});
+  }
+  for(let i=0;i<N;i++){
+    const a = -Math.PI/2 + (i+0.5)*(2*Math.PI/N);
+    dongles.push({x: cx+ (R-38)*Math.cos(a), y: cy+(R-38)*Math.sin(a)});
+  }
+  let svg = `<svg viewBox="0 0 360 320" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<circle cx="${cx}" cy="${cy}" r="34" fill="none" stroke="var(--accent-compile)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  svg += `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">QUANTUM</text>`;
+  svg += `<text x="${cx}" y="${cy+9}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="var(--text-dim)">COMPILER</text>`;
+  dongles.forEach((d,i) => {
+    svg += `<rect x="${d.x-9}" y="${d.y-6}" width="18" height="12" rx="2" fill="var(--accent-take)" opacity="0.85"/>`;
+  });
+  coders.forEach(c => {
+    svg += `<circle cx="${c.x}" cy="${c.y}" r="20" fill="var(--bg-elev)" stroke="var(--accent-refactor)" stroke-width="2"/>`;
+    svg += `<text x="${c.x}" y="${c.y+4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" fill="var(--text)">${c.n}</text>`;
+  });
+  svg += `</svg>`;
+  document.getElementById('hero-diagram').innerHTML = svg;
+})();
+
+/* ================= QUIZ ENGINE ================= */
+function renderQuiz(container, q){
+  const div = document.createElement('div');
+  div.className = 'quiz';
+  div.innerHTML = `<div class="q-title">Check yourself</div><div class="q-text">${q.q}</div><div class="opts"></div><div class="feedback"></div>`;
+  const opts = div.querySelector('.opts');
+  q.options.forEach((opt, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.textContent = opt;
+    btn.onclick = () => {
+      const fb = div.querySelector('.feedback');
+      [...opts.children].forEach(b => b.disabled = true);
+      if(idx === q.correct){
+        btn.classList.add('correct');
+      } else {
+        btn.classList.add('wrong');
+        opts.children[q.correct].classList.add('correct');
+      }
+      fb.textContent = q.explain;
+      fb.classList.add('show');
+    };
+    opts.appendChild(btn);
+  });
+  container.appendChild(div);
+}
+</script>
+
+<script>
+/* ================= SIDEBAR NAV ================= */
+const chapterMeta = [
+  {n:1, title:"Architecture", sections:["What the subject forces","The shape that falls out","The data model"]},
+  {n:2, title:"The scheduler & the heap", sections:["Why a heap at all","One comparison, two policies","Surviving the recode"]},
+  {n:3, title:"Condition variables & the predicate", sections:["The predicate is the design","The acquisition","The release"]},
+  {n:4, title:"Monitor thread & stop flag", sections:["Why a separate thread","The implementation","The stop flag protocol"]},
+  {n:5, title:"Design decisions", sections:["Decisions worth defending","Which Coffman condition","Cleanup"]},
+  {n:6, title:"Evaluator questions", sections:["The ten to answer cold","The traps","The recode & checklist"]},
+];
+const navList = document.getElementById('nav-list');
+chapterMeta.forEach(ch => {
+  const wrap = document.createElement('div');
+  wrap.className = 'nav-chapter';
+  const head = document.createElement('div');
+  head.className = 'nav-chapter-head';
+  head.innerHTML = `<span class="num">${String(ch.n).padStart(2,'0')}</span><span>${ch.title}</span><span class="arrow">›</span>`;
+  head.onclick = () => wrap.classList.toggle('open');
+  wrap.appendChild(head);
+  const secs = document.createElement('div');
+  secs.className = 'nav-sections';
+  ch.sections.forEach((s,i) => {
+    const a = document.createElement('a');
+    a.href = `#ch${ch.n}-s${i}`;
+    a.textContent = s;
+    secs.appendChild(a);
+  });
+  wrap.appendChild(secs);
+  navList.appendChild(wrap);
+});
+// open chapter 1 by default
+navList.querySelector('.nav-chapter').classList.add('open');
+
+/* ================= QUIZ DATA ================= */
+renderQuiz(document.getElementById('ch1-quiz1'), {
+  q: "The design uses two mutexes: sim->mtx for simulation state and sim->log_mtx for output. Why not merge them into one?",
+  options: [
+    "You must merge them — using two mutexes risks a lock-ordering deadlock.",
+    "Separating them means a coder writing a log line doesn't block another coder from checking dongle availability, and you never hold the simulation lock across an I/O call. Merging works but needlessly serializes unrelated work.",
+    "Because POSIX forbids protecting printf with the same mutex as data.",
+    "Because the log mutex must be recursive and the sim mutex must not be."
+  ],
+  correct: 1,
+  explain: "Correct. The two mutexes guard genuinely independent concerns. Merging them would be safe but would couple output throughput to simulation state access for no benefit."
+});
+renderQuiz(document.getElementById('ch2-quiz1'), {
+  q: "Codexion requires fifo/edf ordering. Which component of your design actually implements that ordering?",
+  options: [
+    "pthread_mutex_t — it wakes waiters in arrival order.",
+    "The heap. Neither the mutex (no fairness guarantee) nor the condition variable (wakes an arbitrary waiter) can order anything — the heap's comparison function is the only place ordering policy exists.",
+    "pthread_cond_signal, when called in the correct sequence.",
+    "The kernel's CFS scheduler, via thread priorities."
+  ],
+  correct: 1,
+  explain: "Right — and this is exactly why the subject mandates implementing a heap. The primitives handle protection and sleeping; the heap handles policy."
+});
+renderQuiz(document.getElementById('ch3-quiz1'), {
+  q: "The wait predicate is `!sim->stop && can_proceed(sim, c)`. What breaks if you omit the `!sim->stop` part?",
+  options: [
+    "Nothing — the stop flag is checked separately in the main loop.",
+    "A coder woken by the shutdown broadcast would find can_proceed() false, go straight back to sleep, and never return from coder_routine — so pthread_join hangs forever even though the burnout line printed correctly.",
+    "The coder would take dongles it doesn't own.",
+    "The heap would become corrupted on shutdown."
+  ],
+  correct: 1,
+  explain: "Correct. This is the single most common Codexion shutdown bug: the program prints the right output and then hangs at exit, 0% CPU, main stuck in pthread_join."
+});
+renderQuiz(document.getElementById('ch4-quiz1'), {
+  q: "Why does the subject mandate a separate monitor thread rather than letting each coder detect its own burnout?",
+  options: [
+    "Because pthread_create requires an even number of threads.",
+    "Because a coder that burns out is by definition blocked — asleep waiting for a dongle it will never get. It cannot notice its own death, so something else must be awake and watching.",
+    "Because burnout detection requires root privileges that only one thread can hold.",
+    "Because the coder threads are too busy compiling to check the time."
+  ],
+  correct: 1,
+  explain: "Right. The 10ms reporting requirement forces this: the victim is asleep, so detection must come from outside. That's why 'a separate monitor thread must detect burnout precisely' is in the mandatory part."
+});
+renderQuiz(document.getElementById('ch5-quiz1'), {
+  q: "Which Coffman condition does the both-or-neither acquisition predicate eliminate, and why does that prevent deadlock?",
+  options: [
+    "Mutual exclusion — dongles become shareable between coders.",
+    "Hold-and-wait. Because can_proceed() checks both dongles under a single mutex and the coder takes both or neither, it never holds one while waiting for the other — and without hold-and-wait, a circular wait cannot form.",
+    "No preemption — dongles can now be forcibly taken from a compiling coder.",
+    "Circular wait, by numbering the dongles and always taking the lower id first."
+  ],
+  correct: 1,
+  explain: "Correct. And note it falls out for free: the predicate had to check both dongles anyway, since you can't compile with one. Deadlock prevention emerged from a design chosen for other reasons."
+});
+renderQuiz(document.getElementById('ch6-quiz1'), {
+  q: "An evaluator says: 'You hold a mutex across a 200ms usleep — isn't that terrible practice?' What's the strong answer?",
+  options: [
+    "Yes, it's a flaw I'd fix with more time by releasing the lock during the sleep.",
+    "No, and here it's required: the subject says a coder must hold two dongles for the whole compile. The mutex models physical possession of the dongle, not brief data protection — releasing it mid-compile would let another coder take a dongle that's still plugged in.",
+    "No, because usleep() automatically releases any held mutexes.",
+    "Yes, but it's unavoidable because the allowed function list has no alternative."
+  ],
+  correct: 1,
+  explain: "Correct. Knowing WHY this deliberately deviates from the usual 'keep critical sections short' rule — and being able to say so — is exactly what separates understanding from pattern-matching."
+});
+</script>
+
+</body>
+</html>
